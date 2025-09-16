@@ -1,35 +1,64 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import React, { useState } from 'react';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import LandingPage from './components/LandingPage';
+import SuccessPage from './components/SuccessPage';
+import ErrorSnackbar from './components/ErrorSnackbar';
 
-function App() {
-  const [count, setCount] = useState(0)
+const theme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: {
+      main: '#1976d2',
+    },
+    secondary: {
+      main: '#dc004e',
+    },
+  },
+});
+
+function AppContent() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+
+  // Add a global error handler for auth errors
+  React.useEffect(() => {
+    const handleAuthError = (event: any) => {
+      if (event.detail?.error) {
+        setError(event.detail.error.message || 'Authentication failed');
+      }
+    };
+
+    window.addEventListener('auth-error', handleAuthError);
+    return () => window.removeEventListener('auth-error', handleAuthError);
+  }, []);
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      {isAuthenticated ? <SuccessPage /> : <LandingPage />}
+      <ErrorSnackbar
+        open={!!error}
+        message={error || ''}
+        onClose={() => setError(null)}
+      />
     </>
-  )
+  );
 }
 
-export default App
+function App() {
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ThemeProvider>
+  );
+}
+
+export default App;

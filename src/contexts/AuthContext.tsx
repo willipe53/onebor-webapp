@@ -1,0 +1,131 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
+import { CognitoUser, AuthenticationDetails, CognitoUserAttribute } from 'amazon-cognito-identity-js';
+import { userPool } from '../config/cognito';
+
+interface AuthContextType {
+  user: CognitoUser | null;
+  userEmail: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string) => Promise<void>;
+  logout: () => void;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const [user, setUser] = useState<CognitoUser | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Check if user is already logged in
+    const currentUser = userPool.getCurrentUser();
+    if (currentUser) {
+      currentUser.getSession((err: any, session: any) => {
+        if (err) {
+          setIsLoading(false);
+          return;
+        }
+        if (session && session.isValid()) {
+          setUser(currentUser);
+          setUserEmail(session.getIdToken().payload.email);
+        }
+        setIsLoading(false);
+      });
+    } else {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const login = async (email: string, password: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const cognitoUser = new CognitoUser({
+        Username: email,
+        Pool: userPool,
+      });
+
+      const authenticationDetails = new AuthenticationDetails({
+        Username: email,
+        Password: password,
+      });
+
+      cognitoUser.authenticateUser(authenticationDetails, {
+        onSuccess: (session) => {
+          setUser(cognitoUser);
+          setUserEmail(session.getIdToken().payload.email);
+          resolve();
+        },
+        onFailure: (err) => {
+          // Dispatch custom event for error handling
+          window.dispatchEvent(new CustomEvent('auth-error', { 
+            detail: { error: err } 
+          }));
+          reject(err);
+        },
+      });
+    });
+  };
+
+  const signup = async (email: string, password: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const attributeList = [
+        new CognitoUserAttribute({
+          Name: 'email',
+          Value: email,
+        }),
+      ];
+
+      userPool.signUp(email, password, attributeList, [], (err, result) => {
+        if (err) {
+          // Dispatch custom event for error handling
+          window.dispatchEvent(new CustomEvent('auth-error', { 
+            detail: { error: err } 
+          }));
+          reject(err);
+          return;
+        }
+        
+        if (result?.user) {
+          // For simplicity, we'll auto-login after signup
+          // In production, you might want to handle email verification
+          login(email, password).then(resolve).catch(reject);
+        }
+      });
+    });
+  };
+
+  const logout = () => {
+    if (user) {
+      user.signOut();
+    }
+    setUser(null);
+    setUserEmail(null);
+  };
+
+  const value: AuthContextType = {
+    user,
+    userEmail,
+    isAuthenticated: !!user,
+    isLoading,
+    login,
+    signup,
+    logout,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
