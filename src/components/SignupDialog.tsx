@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -9,8 +9,12 @@ import {
   Box,
   Typography,
   CircularProgress,
-} from '@mui/material';
-import { useAuth } from '../contexts/AuthContext';
+  IconButton,
+  InputAdornment,
+} from "@mui/material";
+import { Visibility, VisibilityOff } from "@mui/icons-material";
+import { useAuth } from "../contexts/AuthContext";
+import ConfirmationDialog from "./ConfirmationDialog";
 
 interface SignupDialogProps {
   open: boolean;
@@ -18,10 +22,15 @@ interface SignupDialogProps {
 }
 
 const SignupDialog: React.FC<SignupDialogProps> = ({ open, onClose }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
   const { signup } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,13 +40,17 @@ const SignupDialog: React.FC<SignupDialogProps> = ({ open, onClose }) => {
     setLoading(true);
     try {
       await signup(email, password);
-      onClose();
-      setEmail('');
-      setPassword('');
-      setConfirmPassword('');
+      // Signup successful, show confirmation dialog
+      setSignupEmail(email);
+      setSignupPassword(password);
+      setShowConfirmation(true);
+      // Clear form but don't close dialog yet
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
     } catch (error: any) {
       // Error handling will be done in the parent component via context
-      console.error('Signup error:', error);
+      console.error("Signup error:", error);
     } finally {
       setLoading(false);
     }
@@ -46,24 +59,31 @@ const SignupDialog: React.FC<SignupDialogProps> = ({ open, onClose }) => {
   const handleClose = () => {
     if (!loading) {
       onClose();
-      setEmail('');
-      setPassword('');
-      setConfirmPassword('');
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      setShowConfirmation(false);
+      setSignupEmail("");
+      setSignupPassword("");
     }
   };
 
-  const isFormValid = email && password && password === confirmPassword && password.length >= 8;
+  const handleConfirmationClose = () => {
+    setShowConfirmation(false);
+    setSignupEmail("");
+    setSignupPassword("");
+    onClose(); // Close the main signup dialog too
+  };
+
+  const isFormValid =
+    email && password && password === confirmPassword && password.length >= 8;
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        <Typography variant="h5" textAlign="center">
-          Sign Up
-        </Typography>
-      </DialogTitle>
+      <DialogTitle sx={{ textAlign: "center" }}>Sign Up</DialogTitle>
       <form onSubmit={handleSubmit}>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
             <TextField
               label="Email"
               type="email"
@@ -75,28 +95,58 @@ const SignupDialog: React.FC<SignupDialogProps> = ({ open, onClose }) => {
             />
             <TextField
               label="Password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               fullWidth
               disabled={loading}
               helperText="Password must be at least 8 characters"
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label="toggle password visibility"
+                      onClick={() => setShowPassword(!showPassword)}
+                      edge="end"
+                      disabled={loading}
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
             />
             <TextField
               label="Confirm Password"
-              type="password"
+              type={showConfirmPassword ? "text" : "password"}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               fullWidth
               disabled={loading}
-              error={confirmPassword !== '' && password !== confirmPassword}
+              error={confirmPassword !== "" && password !== confirmPassword}
               helperText={
-                confirmPassword !== '' && password !== confirmPassword
-                  ? 'Passwords do not match'
-                  : ''
+                confirmPassword !== "" && password !== confirmPassword
+                  ? "Passwords do not match"
+                  : ""
               }
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label="toggle confirm password visibility"
+                      onClick={() =>
+                        setShowConfirmPassword(!showConfirmPassword)
+                      }
+                      edge="end"
+                      disabled={loading}
+                    >
+                      {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
             />
           </Box>
         </DialogContent>
@@ -116,10 +166,18 @@ const SignupDialog: React.FC<SignupDialogProps> = ({ open, onClose }) => {
             fullWidth
             sx={{ ml: 1 }}
           >
-            {loading ? <CircularProgress size={24} /> : 'Sign Up'}
+            {loading ? <CircularProgress size={24} /> : "Sign Up"}
           </Button>
         </DialogActions>
       </form>
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        open={showConfirmation}
+        onClose={handleConfirmationClose}
+        email={signupEmail}
+        password={signupPassword}
+      />
     </Dialog>
   );
 };

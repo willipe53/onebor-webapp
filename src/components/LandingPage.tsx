@@ -1,89 +1,87 @@
-import React, { useState } from 'react';
-import {
-  Box,
-  Button,
-  AppBar,
-  Toolbar,
-  Container,
-  Typography,
-} from '@mui/material';
-import { styled } from '@mui/material/styles';
-import LoginDialog from './LoginDialog';
-import SignupDialog from './SignupDialog';
+import React, { useState } from "react";
+import { Button, Typography } from "@mui/material";
+import { styled } from "@mui/material/styles";
+import LoginDialog from "./LoginDialog";
+import SignupDialog from "./SignupDialog";
+import oneborLogo from "../assets/images/oneborlogo.png";
 
-const LogoContainer = styled(Box)({
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  minHeight: '80vh',
+const AppContainer = styled("div")({
+  height: "100vh",
+  width: "100vw",
+  display: "flex",
+  flexDirection: "column",
 });
 
-const PlaceholderLogo = styled(Box)(({ theme }) => ({
-  width: 200,
-  height: 200,
-  backgroundColor: '#1976d2',
-  borderRadius: '50%',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  marginBottom: theme.spacing(2),
-}));
+const Toolbar = styled("div")({
+  height: "64px",
+  width: "100%",
+  display: "flex",
+  flexDirection: "row",
+  justifyContent: "flex-end",
+  alignItems: "center",
+  padding: "0 16px",
+  boxSizing: "border-box",
+});
+
+const MainPage = styled("div")({
+  flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  alignItems: "center",
+  textAlign: "center",
+});
+
+const LogoImage = styled("img")({
+  maxWidth: 300,
+  maxHeight: 200,
+  width: "auto",
+  height: "auto",
+  marginBottom: "16px",
+});
 
 const LandingPage: React.FC = () => {
   const [loginOpen, setLoginOpen] = useState(false);
   const [signupOpen, setSignupOpen] = useState(false);
 
   return (
-    <Box>
-      {/* Header with Login/Signup buttons */}
-      <AppBar position="static" color="transparent" elevation={0}>
-        <Toolbar sx={{ justifyContent: 'flex-end' }}>
-          <Button
-            variant="outlined"
-            sx={{ mr: 2 }}
-            onClick={() => setLoginOpen(true)}
-          >
-            Client Login
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => setSignupOpen(true)}
-          >
-            Sign Up
-          </Button>
-        </Toolbar>
-      </AppBar>
+    <AppContainer id="app">
+      {/* Toolbar with Login/Signup buttons */}
+      <Toolbar id="toolbar">
+        <Button
+          variant="outlined"
+          sx={{ mr: 2 }}
+          onClick={() => setLoginOpen(true)}
+        >
+          Login
+        </Button>
+        <Button variant="contained" onClick={() => setSignupOpen(true)}>
+          Sign Up
+        </Button>
+      </Toolbar>
 
       {/* Main content with centered logo */}
-      <Container maxWidth="md">
-        <LogoContainer>
-          <PlaceholderLogo>
-            <Typography variant="h3" color="white" fontWeight="bold">
-              LOGO
-            </Typography>
-          </PlaceholderLogo>
-          <Typography variant="h4" color="text.primary" textAlign="center">
-            Welcome to OneBor
-          </Typography>
-          <Typography variant="subtitle1" color="text.secondary" textAlign="center" sx={{ mt: 1 }}>
-            Your business solution platform
-          </Typography>
-        </LogoContainer>
-      </Container>
+      <MainPage id="mainpage">
+        <LogoImage src={oneborLogo} alt="OneBor Logo" />
+        <Typography variant="h4" color="text.primary" textAlign="center">
+          onebor.ai
+        </Typography>
+        <Typography
+          variant="subtitle1"
+          color="text.secondary"
+          textAlign="center"
+          sx={{ mt: 1 }}
+        >
+          The asset allocators toolkit
+        </Typography>
+      </MainPage>
 
       {/* Login Dialog */}
-      <LoginDialog
-        open={loginOpen}
-        onClose={() => setLoginOpen(false)}
-      />
+      <LoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
 
       {/* Signup Dialog */}
-      <SignupDialog
-        open={signupOpen}
-        onClose={() => setSignupOpen(false)}
-      />
-    </Box>
+      <SignupDialog open={signupOpen} onClose={() => setSignupOpen(false)} />
+    </AppContainer>
   );
 };
 

@@ -1,19 +1,19 @@
-import React, { useState } from 'react';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import LandingPage from './components/LandingPage';
-import SuccessPage from './components/SuccessPage';
-import ErrorSnackbar from './components/ErrorSnackbar';
+import React, { useState } from "react";
+import { ThemeProvider, createTheme } from "@mui/material/styles";
+import CssBaseline from "@mui/material/CssBaseline";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import LandingPage from "./components/LandingPage";
+import SuccessPage from "./components/SuccessPage";
+import ErrorSnackbar from "./components/ErrorSnackbar";
 
 const theme = createTheme({
   palette: {
-    mode: 'light',
+    mode: "light",
     primary: {
-      main: '#1976d2',
+      main: "#1976d2",
     },
     secondary: {
-      main: '#dc004e',
+      main: "#dc004e",
     },
   },
 });
@@ -26,12 +26,12 @@ function AppContent() {
   React.useEffect(() => {
     const handleAuthError = (event: any) => {
       if (event.detail?.error) {
-        setError(event.detail.error.message || 'Authentication failed');
+        setError(event.detail.error.message || "Authentication failed");
       }
     };
 
-    window.addEventListener('auth-error', handleAuthError);
-    return () => window.removeEventListener('auth-error', handleAuthError);
+    window.addEventListener("auth-error", handleAuthError);
+    return () => window.removeEventListener("auth-error", handleAuthError);
   }, []);
 
   if (isLoading) {
@@ -43,7 +43,7 @@ function AppContent() {
       {isAuthenticated ? <SuccessPage /> : <LandingPage />}
       <ErrorSnackbar
         open={!!error}
-        message={error || ''}
+        message={error || ""}
         onClose={() => setError(null)}
       />
     </>

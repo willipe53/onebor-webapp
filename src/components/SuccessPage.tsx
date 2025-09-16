@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
   Box,
   Typography,
@@ -7,9 +7,17 @@ import {
   Toolbar,
   Container,
   Paper,
-} from '@mui/material';
-import { CheckCircle } from '@mui/icons-material';
-import { useAuth } from '../contexts/AuthContext';
+} from "@mui/material";
+import { CheckCircle } from "@mui/icons-material";
+import { useAuth } from "../contexts/AuthContext";
+import { styled } from "@mui/material/styles";
+import oneborLogo from "../assets/images/oneborlogo.png";
+
+const HeaderLogo = styled("img")({
+  height: "40px",
+  width: "auto",
+  filter: "brightness(0) invert(1)", // Makes the logo white
+});
 
 const SuccessPage: React.FC = () => {
   const { userEmail, logout } = useAuth();
@@ -18,10 +26,8 @@ const SuccessPage: React.FC = () => {
     <Box>
       {/* Header with Logout button */}
       <AppBar position="static" color="primary">
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
-          <Typography variant="h6" component="div">
-            OneBor
-          </Typography>
+        <Toolbar sx={{ justifyContent: "space-between" }}>
+          <HeaderLogo src={oneborLogo} alt="OneBor Logo" />
           <Button color="inherit" onClick={logout}>
             Logout
           </Button>
@@ -32,18 +38,18 @@ const SuccessPage: React.FC = () => {
       <Container maxWidth="md">
         <Box
           sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '80vh',
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "80vh",
           }}
         >
           <Paper
             elevation={3}
             sx={{
               p: 6,
-              textAlign: 'center',
+              textAlign: "center",
               borderRadius: 2,
               maxWidth: 500,
             }}
@@ -51,7 +57,7 @@ const SuccessPage: React.FC = () => {
             <CheckCircle
               sx={{
                 fontSize: 80,
-                color: 'success.main',
+                color: "success.main",
                 mb: 3,
               }}
             />
@@ -67,9 +73,9 @@ const SuccessPage: React.FC = () => {
               sx={{
                 mt: 2,
                 p: 2,
-                backgroundColor: 'grey.100',
+                backgroundColor: "grey.100",
                 borderRadius: 1,
-                fontFamily: 'monospace',
+                fontFamily: "monospace",
               }}
             >
               {userEmail}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -9,8 +9,12 @@ import {
   Box,
   Typography,
   CircularProgress,
-} from '@mui/material';
-import { useAuth } from '../contexts/AuthContext';
+  IconButton,
+  InputAdornment,
+} from "@mui/material";
+import { Visibility, VisibilityOff } from "@mui/icons-material";
+import { useAuth } from "../contexts/AuthContext";
+import ForgotPasswordDialog from "./ForgotPasswordDialog";
 
 interface LoginDialogProps {
   open: boolean;
@@ -18,9 +22,11 @@ interface LoginDialogProps {
 }
 
 const LoginDialog: React.FC<LoginDialogProps> = ({ open, onClose }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,11 +37,11 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ open, onClose }) => {
     try {
       await login(email, password);
       onClose();
-      setEmail('');
-      setPassword('');
+      setEmail("");
+      setPassword("");
     } catch (error: any) {
       // Error handling will be done in the parent component via context
-      console.error('Login error:', error);
+      console.error("Login error:", error);
     } finally {
       setLoading(false);
     }
@@ -44,21 +50,22 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ open, onClose }) => {
   const handleClose = () => {
     if (!loading) {
       onClose();
-      setEmail('');
-      setPassword('');
+      setEmail("");
+      setPassword("");
+      setShowForgotPassword(false);
     }
+  };
+
+  const handleForgotPasswordClose = () => {
+    setShowForgotPassword(false);
   };
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        <Typography variant="h5" textAlign="center">
-          Client Login
-        </Typography>
-      </DialogTitle>
+      <DialogTitle sx={{ textAlign: "center" }}>Login</DialogTitle>
       <form onSubmit={handleSubmit}>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
             <TextField
               label="Email"
               type="email"
@@ -70,13 +77,38 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ open, onClose }) => {
             />
             <TextField
               label="Password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               fullWidth
               disabled={loading}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label="toggle password visibility"
+                      onClick={() => setShowPassword(!showPassword)}
+                      edge="end"
+                      disabled={loading}
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
             />
+            <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
+              <Button
+                variant="text"
+                size="small"
+                onClick={() => setShowForgotPassword(true)}
+                disabled={loading}
+                sx={{ textTransform: "none" }}
+              >
+                Forgot Password?
+              </Button>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3, pt: 1 }}>
@@ -95,10 +127,16 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ open, onClose }) => {
             fullWidth
             sx={{ ml: 1 }}
           >
-            {loading ? <CircularProgress size={24} /> : 'Login'}
+            {loading ? <CircularProgress size={24} /> : "Login"}
           </Button>
         </DialogActions>
       </form>
+
+      {/* Forgot Password Dialog */}
+      <ForgotPasswordDialog
+        open={showForgotPassword}
+        onClose={handleForgotPasswordClose}
+      />
     </Dialog>
   );
 };

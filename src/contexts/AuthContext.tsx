@@ -1,7 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import type { ReactNode } from 'react';
-import { CognitoUser, AuthenticationDetails, CognitoUserAttribute } from 'amazon-cognito-identity-js';
-import { userPool } from '../config/cognito';
+import React, { createContext, useContext, useState, useEffect } from "react";
+import type { ReactNode } from "react";
+import {
+  CognitoUser,
+  AuthenticationDetails,
+  CognitoUserAttribute,
+} from "amazon-cognito-identity-js";
+import { userPool } from "../config/cognito";
 
 interface AuthContextType {
   user: CognitoUser | null;
@@ -10,6 +14,13 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string) => Promise<void>;
+  confirmSignup: (email: string, confirmationCode: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  confirmForgotPassword: (
+    email: string,
+    confirmationCode: string,
+    newPassword: string
+  ) => Promise<void>;
   logout: () => void;
 }
 
@@ -17,8 +28,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
@@ -72,9 +83,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         },
         onFailure: (err) => {
           // Dispatch custom event for error handling
-          window.dispatchEvent(new CustomEvent('auth-error', { 
-            detail: { error: err } 
-          }));
+          window.dispatchEvent(
+            new CustomEvent("auth-error", {
+              detail: { error: err },
+            })
+          );
           reject(err);
         },
       });
@@ -85,7 +98,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return new Promise((resolve, reject) => {
       const attributeList = [
         new CognitoUserAttribute({
-          Name: 'email',
+          Name: "email",
           Value: email,
         }),
       ];
@@ -93,18 +106,99 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       userPool.signUp(email, password, attributeList, [], (err, result) => {
         if (err) {
           // Dispatch custom event for error handling
-          window.dispatchEvent(new CustomEvent('auth-error', { 
-            detail: { error: err } 
-          }));
+          window.dispatchEvent(
+            new CustomEvent("auth-error", {
+              detail: { error: err },
+            })
+          );
           reject(err);
           return;
         }
-        
+
         if (result?.user) {
-          // For simplicity, we'll auto-login after signup
-          // In production, you might want to handle email verification
-          login(email, password).then(resolve).catch(reject);
+          // User created successfully, but needs email confirmation
+          resolve();
         }
+      });
+    });
+  };
+
+  const confirmSignup = async (
+    email: string,
+    confirmationCode: string
+  ): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const cognitoUser = new CognitoUser({
+        Username: email,
+        Pool: userPool,
+      });
+
+      cognitoUser.confirmRegistration(confirmationCode, true, (err, result) => {
+        if (err) {
+          // Dispatch custom event for error handling
+          window.dispatchEvent(
+            new CustomEvent("auth-error", {
+              detail: { error: err },
+            })
+          );
+          reject(err);
+          return;
+        }
+
+        // Confirmation successful
+        resolve();
+      });
+    });
+  };
+
+  const forgotPassword = async (email: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const cognitoUser = new CognitoUser({
+        Username: email,
+        Pool: userPool,
+      });
+
+      cognitoUser.forgotPassword({
+        onSuccess: () => {
+          resolve();
+        },
+        onFailure: (err) => {
+          // Dispatch custom event for error handling
+          window.dispatchEvent(
+            new CustomEvent("auth-error", {
+              detail: { error: err },
+            })
+          );
+          reject(err);
+        },
+      });
+    });
+  };
+
+  const confirmForgotPassword = async (
+    email: string,
+    confirmationCode: string,
+    newPassword: string
+  ): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const cognitoUser = new CognitoUser({
+        Username: email,
+        Pool: userPool,
+      });
+
+      cognitoUser.confirmPassword(confirmationCode, newPassword, {
+        onSuccess: () => {
+          resolve();
+        },
+        onFailure: (err) => {
+          // Dispatch custom event for error handling
+          window.dispatchEvent(
+            new CustomEvent("auth-error", {
+              detail: { error: err },
+            })
+          );
+          reject(err);
+        },
       });
     });
   };
@@ -124,6 +218,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isLoading,
     login,
     signup,
+    confirmSignup,
+    forgotPassword,
+    confirmForgotPassword,
     logout,
   };
 
