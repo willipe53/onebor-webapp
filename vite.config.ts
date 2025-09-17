@@ -7,4 +7,13 @@ export default defineConfig({
   define: {
     global: "globalThis",
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://api.onebor.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '/panda'),
+      },
+    },
+  },
 });
