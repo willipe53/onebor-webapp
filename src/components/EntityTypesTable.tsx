@@ -1,11 +1,25 @@
-import React, { useMemo } from "react";
-import { Box, Typography, CircularProgress, Button, Chip } from "@mui/material";
+import React, { useState, useMemo } from "react";
+import {
+  Box,
+  Typography,
+  CircularProgress,
+  Button,
+  Modal,
+} from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import type { GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
+import type {
+  GridColDef,
+  GridRenderCellParams,
+  GridRowParams,
+} from "@mui/x-data-grid";
 import { useQuery } from "@tanstack/react-query";
 import * as apiService from "../services/api";
+import EntityTypeForm from "./EntityTypeForm";
 
 const EntityTypesTable: React.FC = () => {
+  const [editingEntityType, setEditingEntityType] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   // Fetch entity types
   const {
     data: rawData,
@@ -31,7 +45,7 @@ const EntityTypesTable: React.FC = () => {
       return rawData;
     }
 
-    // Transform array format [id, name, schema] to object format
+    // Transform array format [id, name, schema, short_label, label_color] to object format
     if (Array.isArray(rawData)) {
       return rawData.map((row: any) => {
         if (Array.isArray(row) && row.length >= 3) {
@@ -40,6 +54,8 @@ const EntityTypesTable: React.FC = () => {
             name: row[1],
             attributes_schema:
               typeof row[2] === "string" ? JSON.parse(row[2]) : row[2],
+            short_label: row[3] || null,
+            label_color: row[4] || null,
           };
         }
         return row;
@@ -76,26 +92,60 @@ const EntityTypesTable: React.FC = () => {
       {
         field: "entity_type_id",
         headerName: "ID",
-        width: 100,
         renderCell: (params: GridRenderCellParams) => (
-          <Chip label={params.value} size="small" />
+          <Typography variant="body2" sx={{ fontWeight: "500" }}>
+            {params.value}
+          </Typography>
         ),
+      },
+      {
+        field: "short_label",
+        headerName: "Type",
+        renderCell: (params: GridRenderCellParams) => {
+          // Get the label_color from the same row
+          const labelColor = params.row.label_color;
+          const colorValue = labelColor?.startsWith("#")
+            ? labelColor
+            : labelColor
+            ? `#${labelColor}`
+            : "#000000";
+
+          return params.value ? (
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: "bold",
+                color: colorValue,
+              }}
+            >
+              {params.value}
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              —
+            </Typography>
+          );
+        },
       },
       {
         field: "name",
         headerName: "Name",
-        width: 200,
-        flex: 1,
       },
       {
         field: "attributes_schema",
         headerName: "Schema Properties",
-        width: 400,
-        flex: 2,
+        flex: 1,
         renderCell: (params: GridRenderCellParams) => (
           <Typography
             variant="body2"
-            sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}
+            sx={{
+              fontFamily: "monospace",
+              fontSize: "0.75rem",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              lineHeight: 1.2,
+              padding: "4px 0",
+            }}
           >
             {formatSchema(params.value)}
           </Typography>
@@ -104,6 +154,16 @@ const EntityTypesTable: React.FC = () => {
     ],
     []
   );
+
+  const handleRowClick = (params: GridRowParams) => {
+    setEditingEntityType(params.row);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingEntityType(null);
+  };
 
   if (isLoading) {
     return (
@@ -138,6 +198,7 @@ const EntityTypesTable: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
+      {/* Updated header styling - force refresh */}
       <Typography variant="h5" gutterBottom>
         Entity Types
       </Typography>
@@ -156,16 +217,68 @@ const EntityTypesTable: React.FC = () => {
             },
           }}
           disableRowSelectionOnClick
+          onRowClick={handleRowClick}
+          getRowHeight={() => "auto"}
           sx={{
             "& .MuiDataGrid-cell": {
               fontSize: "0.875rem",
+              display: "flex",
+              alignItems: "center",
+              lineHeight: "unset !important",
+              maxHeight: "none !important",
+              whiteSpace: "unset",
+            },
+            "& .MuiDataGrid-row": {
+              maxHeight: "none !important",
+            },
+            "& .MuiDataGrid-renderingZone": {
+              maxHeight: "none !important",
             },
             "& .MuiDataGrid-columnHeaders": {
-              backgroundColor: "rgba(0, 0, 0, 0.04)",
+              backgroundColor: "rgba(25, 118, 210, 0.15) !important", // Slightly more visible blue
+              borderBottom: "1px solid rgba(25, 118, 210, 0.2) !important",
+            },
+            "& .MuiDataGrid-columnHeader": {
+              backgroundColor: "rgba(25, 118, 210, 0.15) !important",
+              display: "flex",
+              alignItems: "center",
             },
           }}
         />
       </Box>
+
+      {/* Edit Modal */}
+      <Modal
+        open={isModalOpen}
+        onClose={handleCloseModal}
+        aria-labelledby="edit-entity-type-modal"
+        aria-describedby="edit-entity-type-form"
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "90%",
+            maxWidth: 700,
+            height: "90vh",
+            display: "flex",
+            flexDirection: "column",
+            bgcolor: "background.paper",
+            borderRadius: 2,
+            boxShadow: 24,
+            p: 0,
+          }}
+        >
+          {editingEntityType && (
+            <EntityTypeForm
+              editingEntityType={editingEntityType}
+              onClose={handleCloseModal}
+            />
+          )}
+        </Box>
+      </Modal>
     </Box>
   );
 };

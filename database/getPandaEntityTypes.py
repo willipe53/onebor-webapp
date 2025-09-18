@@ -3,10 +3,12 @@ import json
 import pymysql
 import os
 
+
 def get_db_secret():
     client = boto3.client("secretsmanager")
     response = client.get_secret_value(SecretId=os.environ["SECRET_ARN"])
     return json.loads(response["SecretString"])
+
 
 def get_connection(secrets):
     return pymysql.connect(
@@ -17,11 +19,12 @@ def get_connection(secrets):
         connect_timeout=5
     )
 
+
 def lambda_handler(event, context):
     conn = None
     try:
         secrets = get_db_secret()
-        conn = get_connection(secrets)      
+        conn = get_connection(secrets)
         with conn.cursor() as cursor:
             cursor.execute("SELECT * FROM entity_types")
             rows = cursor.fetchall()

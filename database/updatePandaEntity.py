@@ -5,10 +5,12 @@ import os
 
 SECRET_ARN = os.environ["SECRET_ARN"]
 
+
 def get_db_secret():
     client = boto3.client("secretsmanager")
     response = client.get_secret_value(SecretId=SECRET_ARN)
     return json.loads(response["SecretString"])
+
 
 def get_connection(secrets):
     return pymysql.connect(
@@ -19,6 +21,7 @@ def get_connection(secrets):
         connect_timeout=5,
         cursorclass=pymysql.cursors.DictCursor
     )
+
 
 def lambda_handler(event, context):
     conn = None
@@ -36,12 +39,26 @@ def lambda_handler(event, context):
         parent_entity_id = body.get("parent_entity_id")
         attributes = body.get("attributes")
 
+        # Debug logging
+        print(
+            f"DEBUG: entity_id={entity_id}, name={name}, entity_type_id={entity_type_id}")
+        print(
+            f"DEBUG: parent_entity_id={parent_entity_id}, attributes={attributes}")
+
         secrets = get_db_secret()
         conn = get_connection(secrets)
 
         with conn.cursor() as cursor:
             if entity_id:
                 # --- UPDATE existing record ---
+                # First check if entity exists
+                cursor.execute(
+                    "SELECT * FROM entities WHERE entity_id = %s", (entity_id,))
+                existing_entity = cursor.fetchone()
+                print(f"DEBUG: Existing entity: {existing_entity}")
+
+                if not existing_entity:
+                    return {"statusCode": 404, "body": json.dumps({"error": f"Entity with ID {entity_id} not found"})}
                 updates = []
                 params = []
 
@@ -56,24 +73,44 @@ def lambda_handler(event, context):
                     params.append(parent_entity_id)
 
                 if attributes:
-                    # Build JSON_SET with alternating path/value pairs
-                    paths_and_values = []
-                    for key, value in attributes.items():
-                        paths_and_values.append(f"$.{key}")
-                        paths_and_values.append(
-                            json.dumps(value) if isinstance(value, (dict, list)) else value
-                        )
-                    updates.append("attributes = JSON_SET(attributes, " + ", ".join(["%s"] * len(paths_and_values)) + ")")
-                    params.extend(paths_and_values)
+                    # Replace entire attributes JSON instead of using JSON_SET
+                    # This avoids JSON path issues with special characters in keys
+                    updates.append("attributes = %s")
+                    # Check if attributes is already a JSON string
+                    if isinstance(attributes, str):
+                        # It's already a JSON string, use as-is
+                        params.append(attributes)
+                        print(f"DEBUG: attributes is string: {attributes}")
+                    else:
+                        # It's an object, convert to JSON string
+                        json_string = json.dumps(attributes)
+                        params.append(json_string)
+                        print(
+                            f"DEBUG: attributes converted to JSON: {json_string}")
 
                 if not updates:
                     return {"statusCode": 400, "body": json.dumps({"error": "No fields to update"})}
 
                 sql = f"UPDATE entities SET {', '.join(updates)} WHERE entity_id = %s"
                 params.append(entity_id)
+
+                # Debug logging for SQL execution
+                print(f"DEBUG: Executing SQL: {sql}")
+                print(f"DEBUG: Parameters: {params}")
+
                 cursor.execute(sql, params)
+                rows_affected = cursor.rowcount
                 conn.commit()
-                result = {"message": "Entity updated", "entity_id": entity_id}
+
+                print(f"DEBUG: Rows affected: {rows_affected}")
+
+                if rows_affected == 0:
+                    print(
+                        f"WARNING: No rows updated for entity_id={entity_id}")
+                    return {"statusCode": 404, "body": json.dumps({"error": f"Entity with ID {entity_id} not found or no changes made"})}
+
+                result = {"message": "Entity updated",
+                          "entity_id": entity_id, "rows_affected": rows_affected}
 
             else:
                 # --- INSERT new record ---
@@ -81,13 +118,25 @@ def lambda_handler(event, context):
                     INSERT INTO entities (name, entity_type_id, parent_entity_id, attributes)
                     VALUES (%s, %s, %s, %s)
                 """
+                # Handle attributes for INSERT
+                attributes_value = None
+                if attributes:
+                    if isinstance(attributes, str):
+                        attributes_value = attributes
+                        print(
+                            f"DEBUG: INSERT attributes is string: {attributes}")
+                    else:
+                        attributes_value = json.dumps(attributes)
+                        print(
+                            f"DEBUG: INSERT attributes converted to JSON: {attributes_value}")
+
                 cursor.execute(
                     sql,
                     (
                         name,
                         entity_type_id,
                         parent_entity_id,
-                        json.dumps(attributes) if attributes else None,
+                        attributes_value,
                     ),
                 )
                 conn.commit()

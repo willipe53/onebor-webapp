@@ -8,11 +8,17 @@ import {
   Stack,
   MenuItem,
   Chip,
+  Modal,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import type { GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
+import type {
+  GridColDef,
+  GridRenderCellParams,
+  GridRowParams,
+} from "@mui/x-data-grid";
 import { useQuery } from "@tanstack/react-query";
 import * as apiService from "../services/api";
+import EntityForm from "./EntityForm";
 
 const EntitiesTable: React.FC = () => {
   const [filters, setFilters] = useState<apiService.QueryEntitiesRequest>({});
@@ -20,6 +26,8 @@ const EntitiesTable: React.FC = () => {
   const [entityIdFilter, setEntityIdFilter] = useState("");
   const [entityTypeFilter, setEntityTypeFilter] = useState("");
   const [parentEntityFilter, setParentEntityFilter] = useState("");
+  const [editingEntity, setEditingEntity] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Fetch entities
   const {
@@ -55,8 +63,7 @@ const EntitiesTable: React.FC = () => {
             name: row[1],
             entity_type_id: row[2],
             parent_entity_id: row[3],
-            attributes:
-              typeof row[4] === "string" ? JSON.parse(row[4]) : row[4],
+            attributes: row[4], // Don't parse here, let formatAttributes handle it
           };
         }
         return row;
@@ -86,7 +93,7 @@ const EntitiesTable: React.FC = () => {
       return rawEntityTypesData;
     }
 
-    // Transform array format [id, name, schema] to object format
+    // Transform array format [id, name, schema, short_label, label_color] to object format
     if (Array.isArray(rawEntityTypesData)) {
       return rawEntityTypesData.map((row: any) => {
         if (Array.isArray(row) && row.length >= 3) {
@@ -95,6 +102,8 @@ const EntitiesTable: React.FC = () => {
             name: row[1],
             attributes_schema:
               typeof row[2] === "string" ? JSON.parse(row[2]) : row[2],
+            short_label: row[3] || null,
+            label_color: row[4] || null,
           };
         }
         return row;
@@ -105,17 +114,52 @@ const EntitiesTable: React.FC = () => {
   }, [rawEntityTypesData]);
 
   const formatAttributes = (attributes: any) => {
-    if (!attributes || typeof attributes !== "object") return "None";
+    if (!attributes) return "None";
+
+    let parsedAttributes;
+
+    // Handle different data types - parse to object first
+    if (typeof attributes === "string") {
+      try {
+        parsedAttributes = JSON.parse(attributes);
+      } catch {
+        return `Invalid JSON: ${attributes.substring(0, 50)}...`;
+      }
+    } else if (typeof attributes === "object") {
+      parsedAttributes = attributes;
+    } else {
+      return String(attributes);
+    }
 
     try {
-      const parsed =
-        typeof attributes === "string" ? JSON.parse(attributes) : attributes;
-      const entries = Object.entries(parsed);
+      const entries = Object.entries(parsedAttributes);
       if (entries.length === 0) return "None";
 
-      return entries.map(([key, value]) => `${key}: ${value}`).join(", ");
+      return entries
+        .map(([key, value]) => {
+          // Determine the type of the value for better formatting
+          let valueType = typeof value;
+          let displayValue = String(value);
+
+          // Handle special cases
+          if (value === null) {
+            valueType = "null";
+            displayValue = "null";
+          } else if (Array.isArray(value)) {
+            valueType = "array";
+            displayValue = `[${value.length} items]`;
+          } else if (typeof value === "object") {
+            valueType = "object";
+            displayValue = "{...}";
+          } else if (typeof value === "string" && value.length > 20) {
+            displayValue = `${value.substring(0, 20)}...`;
+          }
+
+          return `${key}(${valueType}): ${displayValue}`;
+        })
+        .join(", ");
     } catch {
-      return String(attributes);
+      return "Invalid attributes";
     }
   };
 
@@ -125,54 +169,128 @@ const EntitiesTable: React.FC = () => {
       {
         field: "entity_id",
         headerName: "ID",
-        width: 100,
         renderCell: (params: GridRenderCellParams) => (
-          <Chip label={params.value} size="small" />
+          <Typography variant="body2" sx={{ fontWeight: "500" }}>
+            {params.value}
+          </Typography>
         ),
+      },
+      {
+        field: "short_label",
+        headerName: "Type",
+        renderCell: (params: GridRenderCellParams) => {
+          // Find the entity type for this entity to get its short_label and color
+          const entityType = entityTypesData?.find(
+            (type) => type.entity_type_id === params.row.entity_type_id
+          );
+          const shortLabel = entityType?.short_label;
+          const labelColor = entityType?.label_color;
+          const colorValue = labelColor?.startsWith("#")
+            ? labelColor
+            : labelColor
+            ? `#${labelColor}`
+            : "#000000";
+
+          return shortLabel ? (
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: "bold",
+                color: colorValue,
+              }}
+            >
+              {shortLabel}
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              —
+            </Typography>
+          );
+        },
       },
       {
         field: "name",
         headerName: "Name",
-        width: 250,
-        flex: 1,
-      },
-      {
-        field: "entity_type_id",
-        headerName: "Type ID",
-        width: 100,
-        renderCell: (params: GridRenderCellParams) => (
-          <Chip label={params.value} size="small" color="primary" />
-        ),
       },
       {
         field: "parent_entity_id",
-        headerName: "Parent ID",
-        width: 120,
-        renderCell: (params: GridRenderCellParams) =>
-          params.value ? (
-            <Chip label={params.value} size="small" color="secondary" />
-          ) : (
-            <Typography variant="caption" color="text.secondary">
-              None
-            </Typography>
-          ),
+        headerName: "Parent",
+        renderCell: (params: GridRenderCellParams) => {
+          if (!params.value) {
+            return (
+              <Typography variant="body2" color="text.secondary">
+                —
+              </Typography>
+            );
+          }
+
+          // Find the parent entity
+          const parentEntity = entitiesData?.find(
+            (entity) => entity.entity_id === params.value
+          );
+
+          if (!parentEntity) {
+            return (
+              <Typography variant="body2" color="text.secondary">
+                Unknown
+              </Typography>
+            );
+          }
+
+          // Find the parent's entity type for color information
+          const parentEntityType = entityTypesData?.find(
+            (type) => type.entity_type_id === parentEntity.entity_type_id
+          );
+          const parentShortLabel = parentEntityType?.short_label;
+          const parentLabelColor = parentEntityType?.label_color;
+          const parentColorValue = parentLabelColor?.startsWith("#")
+            ? parentLabelColor
+            : parentLabelColor
+            ? `#${parentLabelColor}`
+            : "#000000";
+
+          const chipLabel = parentShortLabel
+            ? `${parentShortLabel} ${parentEntity.name}`
+            : parentEntity.name;
+
+          return (
+            <Chip
+              label={chipLabel}
+              size="small"
+              sx={{
+                backgroundColor: parentColorValue + "20", // 20% opacity background
+                color: parentColorValue,
+                fontWeight: "bold",
+                "& .MuiChip-label": {
+                  fontWeight: "bold",
+                },
+              }}
+            />
+          );
+        },
       },
       {
         field: "attributes",
         headerName: "Attributes",
-        width: 300,
         flex: 1,
         renderCell: (params: GridRenderCellParams) => (
           <Typography
             variant="body2"
-            sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}
+            sx={{
+              fontFamily: "monospace",
+              fontSize: "0.75rem",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              lineHeight: 1.2,
+              padding: "4px 0",
+            }}
           >
             {formatAttributes(params.value)}
           </Typography>
         ),
       },
     ],
-    []
+    [entityTypesData, entitiesData]
   );
 
   if (isLoading) {
@@ -223,6 +341,16 @@ const EntitiesTable: React.FC = () => {
     setEntityIdFilter("");
     setEntityTypeFilter("");
     setParentEntityFilter("");
+  };
+
+  const handleRowClick = (params: GridRowParams) => {
+    setEditingEntity(params.row);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingEntity(null);
   };
 
   return (
@@ -284,6 +412,9 @@ const EntitiesTable: React.FC = () => {
             <Button variant="outlined" onClick={clearFilters}>
               Clear Filters
             </Button>
+            <Button variant="outlined" onClick={() => refetch()}>
+              Refresh Data
+            </Button>
           </Stack>
         </Stack>
       </Box>
@@ -302,16 +433,59 @@ const EntitiesTable: React.FC = () => {
             },
           }}
           disableRowSelectionOnClick
+          onRowClick={handleRowClick}
+          getRowHeight={() => "auto"}
           sx={{
             "& .MuiDataGrid-cell": {
               fontSize: "0.875rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-start",
             },
             "& .MuiDataGrid-columnHeaders": {
-              backgroundColor: "rgba(0, 0, 0, 0.04)",
+              backgroundColor: "rgba(25, 118, 210, 0.15) !important", // Slightly more visible blue
+              borderBottom: "1px solid rgba(25, 118, 210, 0.2) !important",
+            },
+            "& .MuiDataGrid-columnHeader": {
+              backgroundColor: "rgba(25, 118, 210, 0.15) !important",
+              display: "flex",
+              alignItems: "center",
             },
           }}
         />
       </Box>
+
+      {/* Edit Modal */}
+      <Modal
+        open={isModalOpen}
+        onClose={handleCloseModal}
+        aria-labelledby="edit-entity-modal"
+        aria-describedby="edit-entity-form"
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "90%",
+            maxWidth: 800,
+            maxHeight: "90vh",
+            overflow: "auto",
+            bgcolor: "background.paper",
+            borderRadius: 2,
+            boxShadow: 24,
+            p: 0,
+          }}
+        >
+          {editingEntity && (
+            <EntityForm
+              editingEntity={editingEntity}
+              onClose={handleCloseModal}
+            />
+          )}
+        </Box>
+      </Modal>
     </Box>
   );
 };

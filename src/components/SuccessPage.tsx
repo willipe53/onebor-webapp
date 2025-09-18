@@ -14,8 +14,8 @@ import { CheckCircle, Add, ViewList } from "@mui/icons-material";
 import { useAuth } from "../contexts/AuthContext";
 import { styled } from "@mui/material/styles";
 import oneborLogo from "../assets/images/oneborlogo.png";
-import CreateEntityForm from "./CreateEntityForm";
-import CreateEntityTypeForm from "./CreateEntityTypeForm";
+import EntityForm from "./EntityForm";
+import EntityTypeForm from "./EntityTypeForm";
 import EntitiesTable from "./EntitiesTable";
 import EntityTypesTable from "./EntityTypesTable";
 
@@ -94,9 +94,9 @@ const SuccessPage: React.FC = () => {
           </Container>
         );
       case 1:
-        return <CreateEntityForm />;
+        return <EntityForm />;
       case 2:
-        return <CreateEntityTypeForm />;
+        return <EntityTypeForm />;
       case 3:
         return <EntitiesTable />;
       case 4:

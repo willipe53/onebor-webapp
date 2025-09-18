@@ -58,6 +58,8 @@ export interface EntityType {
 export interface CreateEntityTypeRequest {
   name: string;
   attributes_schema: any;
+  short_label?: string;
+  label_color?: string;
 }
 
 export interface QueryEntityTypesRequest {
@@ -78,16 +80,16 @@ export interface Entity {
 export interface CreateEntityRequest {
   name: string;
   entity_type_id: number;
-  parent_entity_id: number | null;
-  attributes: any;
+  parent_entity_id?: number | null;
+  attributes?: any;
 }
 
 export interface UpdateEntityRequest {
-  entity_id?: number; // If passed with exact match, update all values
-  name?: string; // If passed with exact match, update all values
-  entity_type_id?: number; // New entity type
-  parent_entity_id?: number | null; // New parent entity
-  attributes?: any; // New attributes
+  entity_id?: number; // If passed, update existing entity; if not passed, create new entity
+  name?: string;
+  entity_type_id?: number;
+  parent_entity_id?: number | null;
+  attributes?: any;
 }
 
 export interface QueryEntitiesRequest {
@@ -115,7 +117,7 @@ export const queryEntityTypes = async (
 export const createEntity = async (
   data: CreateEntityRequest
 ): Promise<Entity> => {
-  return apiCall<Entity>("/create_entity", data);
+  return apiCall<Entity>("/update_entity", data);
 };
 
 export const queryEntities = async (
