@@ -22,21 +22,60 @@ def lambda_handler(event, context):
         elif not body:
             body = event
 
-        client_group_id, name = body.get("client_group_id"), body.get("name")
+        client_group_id = body.get("client_group_id")
+        name = body.get("name")
+        preferences = body.get("preferences")
+
         s = get_db_secret()
         conn = get_connection(s)
 
         if client_group_id:
-            q = "UPDATE client_groups SET name=%s WHERE client_group_id=%s"
-            params = [name, client_group_id]
+            # Update existing client group
+            updates = []
+            params = []
+
+            if name is not None:
+                updates.append("name = %s")
+                params.append(name)
+            if preferences is not None:
+                updates.append("preferences = %s")
+                # Handle JSON serialization
+                if isinstance(preferences, (dict, list)):
+                    params.append(json.dumps(preferences))
+                else:
+                    params.append(preferences)
+
+            if not updates:
+                return {"statusCode": 400, "headers": {"Content-Type": "application/json"},
+                        "body": json.dumps({"error": "No fields to update"})}
+
+            q = f"UPDATE client_groups SET {', '.join(updates)} WHERE client_group_id = %s"
+            params.append(client_group_id)
         else:
-            q = "INSERT INTO client_groups (name) VALUES (%s)"
-            params = [name]
+            # Insert new client group (name is required)
+            if not name:
+                return {"statusCode": 400, "headers": {"Content-Type": "application/json"},
+                        "body": json.dumps({"error": "name is required for new client groups"})}
+
+            q = "INSERT INTO client_groups (name, preferences) VALUES (%s, %s)"
+
+            preferences_json = None
+            if preferences is not None:
+                if isinstance(preferences, (dict, list)):
+                    preferences_json = json.dumps(preferences)
+                else:
+                    preferences_json = preferences
+
+            params = [name, preferences_json]
 
         with conn.cursor() as c:
             c.execute(q, params)
             conn.commit()
-        return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"success": True, "id": client_group_id or c.lastrowid})}
+
+            # Return the client_group_id for reference
+            result_id = client_group_id or c.lastrowid
+            return {"statusCode": 200, "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"success": True, "id": result_id})}
     except Exception as e:
         return {"statusCode": 500, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"error": str(e)})}
     finally:

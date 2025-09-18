@@ -22,18 +22,74 @@ def lambda_handler(event, context):
         elif not body:
             body = event
 
-        user_id, email, name = body.get(
-            "user_id"), body.get("email"), body.get("name")
+        user_id = body.get("user_id")
+        email = body.get("email")
+        name = body.get("name")
+        preferences = body.get("preferences")
+        primary_client_group_id = body.get("primary_client_group_id")
+
         s = get_db_secret()
         conn = get_connection(s)
 
-        q = """INSERT INTO users (user_id,email,name) VALUES (%s,%s,%s)
-             ON DUPLICATE KEY UPDATE email=VALUES(email), name=VALUES(name)"""
+        # Build dynamic query to handle optional fields
+        if user_id:
+            # Update existing user
+            updates = []
+            params = []
+
+            if email is not None:
+                updates.append("email = %s")
+                params.append(email)
+            if name is not None:
+                updates.append("name = %s")
+                params.append(name)
+            if preferences is not None:
+                updates.append("preferences = %s")
+                # Handle JSON serialization
+                if isinstance(preferences, (dict, list)):
+                    params.append(json.dumps(preferences))
+                else:
+                    params.append(preferences)
+            if primary_client_group_id is not None:
+                updates.append("primary_client_group_id = %s")
+                params.append(primary_client_group_id)
+
+            if not updates:
+                return {"statusCode": 400, "headers": {"Content-Type": "application/json"},
+                        "body": json.dumps({"error": "No fields to update"})}
+
+            q = f"UPDATE users SET {', '.join(updates)} WHERE user_id = %s"
+            params.append(user_id)
+        else:
+            # Insert new user (user_id, email, name are required for new users)
+            if not email or not name:
+                return {"statusCode": 400, "headers": {"Content-Type": "application/json"},
+                        "body": json.dumps({"error": "email and name are required for new users"})}
+
+            # Generate new user_id if not provided
+            import uuid
+            user_id = str(uuid.uuid4())
+
+            q = """INSERT INTO users (user_id, email, name, preferences, primary_client_group_id) 
+                   VALUES (%s, %s, %s, %s, %s)"""
+
+            preferences_json = None
+            if preferences is not None:
+                if isinstance(preferences, (dict, list)):
+                    preferences_json = json.dumps(preferences)
+                else:
+                    preferences_json = preferences
+
+            params = [user_id, email, name,
+                      preferences_json, primary_client_group_id]
+
         with conn.cursor() as c:
-            c.execute(q, [user_id, email, name])
+            c.execute(q, params)
             conn.commit()
 
-        return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"success": True})}
+            # Return the user_id for reference
+            return {"statusCode": 200, "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"success": True, "user_id": user_id})}
     except Exception as e:
         return {"statusCode": 500, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"error": str(e)})}
     finally:

@@ -322,3 +322,147 @@ class TestClientGroups(BaseAPITest):
             # Remove from cleanup list since we manually deleted them
             if group_id in self.created_client_groups:
                 self.created_client_groups.remove(group_id)
+
+    @pytest.mark.integration
+    def test_client_group_preferences(self):
+        """Test updating client group preferences field."""
+        # Get existing client groups
+        existing_groups = self.get_client_groups()
+        if len(existing_groups) == 0:
+            # Create a test group if none exist
+            test_name = self.generate_test_name("PREFERENCES_TEST")
+            create_result = self.create_client_group(test_name)
+            test_group_id = create_result['id']
+            original_preferences = None
+        else:
+            test_group = existing_groups[0]
+            test_group_id = test_group['client_group_id']
+            original_preferences = test_group.get('preferences')
+
+        # Store original value for restoration
+        self.store_original_value(
+            f"client_group_{test_group_id}_preferences", original_preferences)
+
+        try:
+            # Step 1: Update preferences with JSON object
+            test_preferences = {
+                "default_permissions": {
+                    "read": True,
+                    "write": False,
+                    "admin": False
+                },
+                "ui_settings": {
+                    "theme": "corporate",
+                    "layout": "compact"
+                },
+                "notification_settings": {
+                    "group_announcements": True,
+                    "member_activities": False
+                },
+                "billing_preferences": {
+                    "currency": "USD",
+                    "auto_renew": True
+                }
+            }
+
+            response = self.api_call("/update_client_group", {
+                "client_group_id": test_group_id,
+                "preferences": test_preferences
+            })
+            assert response.get(
+                "success"), f"Failed to update client group preferences: {response}"
+
+            # Validate preferences update
+            updated_groups = self.get_client_groups(
+                {'client_group_id': test_group_id})
+            assert len(
+                updated_groups) == 1, f"Expected 1 group, got {len(updated_groups)}"
+            updated_group = updated_groups[0]
+
+            # Check if preferences are properly stored and retrieved
+            if updated_group.get('preferences'):
+                if isinstance(updated_group['preferences'], str):
+                    import json
+                    stored_preferences = json.loads(
+                        updated_group['preferences'])
+                else:
+                    stored_preferences = updated_group['preferences']
+
+                assert stored_preferences['default_permissions']['read'] == test_preferences['default_permissions']['read']
+                assert stored_preferences['ui_settings']['theme'] == test_preferences['ui_settings']['theme']
+                assert stored_preferences['billing_preferences']['currency'] == test_preferences['billing_preferences']['currency']
+
+            # Step 2: Update preferences with a different structure
+            test_preferences_v2 = {
+                "version": 2,
+                "features": ["dashboard", "reporting", "analytics"],
+                "limits": {
+                    "max_users": 50,
+                    "storage_gb": 100
+                }
+            }
+
+            response = self.api_call("/update_client_group", {
+                "client_group_id": test_group_id,
+                "preferences": test_preferences_v2
+            })
+            assert response.get(
+                "success"), f"Failed to update client group preferences v2: {response}"
+
+            # Validate second preferences update
+            updated_groups = self.get_client_groups(
+                {'client_group_id': test_group_id})
+            updated_group = updated_groups[0]
+
+            if updated_group.get('preferences'):
+                if isinstance(updated_group['preferences'], str):
+                    import json
+                    stored_preferences = json.loads(
+                        updated_group['preferences'])
+                else:
+                    stored_preferences = updated_group['preferences']
+
+                assert stored_preferences['version'] == 2
+                assert "dashboard" in stored_preferences['features']
+                assert stored_preferences['limits']['max_users'] == 50
+
+            # Step 3: Test clearing preferences (set to null)
+            response = self.api_call("/update_client_group", {
+                "client_group_id": test_group_id,
+                "preferences": None
+            })
+            assert response.get(
+                "success"), f"Failed to clear client group preferences: {response}"
+
+            # Validate preferences cleared
+            updated_groups = self.get_client_groups(
+                {'client_group_id': test_group_id})
+            updated_group = updated_groups[0]
+            # Should be null or empty
+            assert updated_group.get('preferences') in [None, '', '{}']
+
+        finally:
+            # Step 4: Restore original values
+            if original_preferences is not None:
+                response = self.api_call("/update_client_group", {
+                    "client_group_id": test_group_id,
+                    "preferences": original_preferences
+                })
+                assert response.get(
+                    "success"), f"Failed to restore client group preferences: {response}"
+
+            # Final validation - ensure restoration
+            final_groups = self.get_client_groups(
+                {'client_group_id': test_group_id})
+            if len(final_groups) > 0:
+                final_group = final_groups[0]
+                assert final_group.get('preferences') == original_preferences
+
+            # Clean up test group if we created it
+            if len(existing_groups) == 0:
+                delete_result = self.delete_record(
+                    test_group_id, "Client Group")
+                assert delete_result[
+                    'success'] is True, f"Cleanup deletion of group {test_group_id} should succeed"
+                if test_group_id in self.created_client_groups:
+                    self.created_client_groups.remove(test_group_id)

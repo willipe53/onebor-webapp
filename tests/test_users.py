@@ -27,6 +27,10 @@ class TestUsers(BaseAPITest):
             f"user_{original_user_id}_email", original_email)
         self.store_original_value(
             f"user_{original_user_id}_name", original_name)
+        self.store_original_value(
+            f"user_{original_user_id}_preferences", test_user.get('preferences'))
+        self.store_original_value(
+            f"user_{original_user_id}_primary_client_group_id", test_user.get('primary_client_group_id'))
 
         # Step 1: Update user with "TEST" suffix
         test_email = f"test_{self.get_test_timestamp()}@example.com"
@@ -372,3 +376,147 @@ class TestUsers(BaseAPITest):
             # Remove from cleanup list since we manually deleted them
             if user_data['user_id'] in self.created_users:
                 self.created_users.remove(user_data['user_id'])
+
+    @pytest.mark.integration
+    def test_user_preferences_and_primary_client_group(self):
+        """Test updating user preferences and primary_client_group_id fields."""
+        # Get existing users
+        existing_users = self.get_users()
+        assert len(existing_users) > 0, "No existing users found for testing"
+
+        # Pick the first user for testing
+        test_user = existing_users[0]
+        original_user_id = test_user['user_id']
+        original_preferences = test_user.get('preferences')
+        original_primary_client_group_id = test_user.get(
+            'primary_client_group_id')
+
+        # Store original values for restoration
+        self.store_original_value(
+            f"user_{original_user_id}_preferences", original_preferences)
+        self.store_original_value(
+            f"user_{original_user_id}_primary_client_group_id", original_primary_client_group_id)
+
+        try:
+            # Step 1: Update preferences with JSON object
+            test_preferences = {
+                "theme": "dark",
+                "language": "en",
+                "notifications": {
+                    "email": True,
+                    "push": False
+                },
+                "dashboard_widgets": ["calendar", "tasks", "metrics"]
+            }
+
+            response = self.api_call("/update_user", {
+                "user_id": original_user_id,
+                "preferences": test_preferences
+            })
+            assert response.get(
+                "success"), f"Failed to update user preferences: {response}"
+
+            # Validate preferences update
+            updated_users = self.get_users({'user_id': original_user_id})
+            assert len(
+                updated_users) == 1, f"Expected 1 user, got {len(updated_users)}"
+            updated_user = updated_users[0]
+
+            # Check if preferences are properly stored and retrieved
+            if updated_user.get('preferences'):
+                if isinstance(updated_user['preferences'], str):
+                    import json
+                    stored_preferences = json.loads(
+                        updated_user['preferences'])
+                else:
+                    stored_preferences = updated_user['preferences']
+
+                assert stored_preferences['theme'] == test_preferences['theme']
+                assert stored_preferences['language'] == test_preferences['language']
+                assert stored_preferences['notifications']['email'] == test_preferences['notifications']['email']
+
+            # Step 2: Get available client groups for primary_client_group_id test
+            client_groups = self.get_client_groups()
+            if len(client_groups) > 0:
+                test_primary_group_id = client_groups[0]['client_group_id']
+
+                response = self.api_call("/update_user", {
+                    "user_id": original_user_id,
+                    "primary_client_group_id": test_primary_group_id
+                })
+                assert response.get(
+                    "success"), f"Failed to update primary_client_group_id: {response}"
+
+                # Validate primary_client_group_id update
+                updated_users = self.get_users({'user_id': original_user_id})
+                updated_user = updated_users[0]
+                assert updated_user.get(
+                    'primary_client_group_id') == test_primary_group_id
+
+            # Step 3: Test updating both fields together
+            test_preferences_v2 = {
+                "theme": "light",
+                "auto_save": True,
+                "version": 2
+            }
+
+            update_data = {
+                "user_id": original_user_id,
+                "preferences": test_preferences_v2
+            }
+
+            if len(client_groups) > 1:
+                update_data["primary_client_group_id"] = client_groups[1]['client_group_id']
+
+            response = self.api_call("/update_user", update_data)
+            assert response.get(
+                "success"), f"Failed to update both fields: {response}"
+
+            # Validate both updates
+            updated_users = self.get_users({'user_id': original_user_id})
+            updated_user = updated_users[0]
+
+            if updated_user.get('preferences'):
+                if isinstance(updated_user['preferences'], str):
+                    import json
+                    stored_preferences = json.loads(
+                        updated_user['preferences'])
+                else:
+                    stored_preferences = updated_user['preferences']
+
+                assert stored_preferences['theme'] == "light"
+                assert stored_preferences['version'] == 2
+
+            # Step 4: Test clearing preferences (set to null)
+            response = self.api_call("/update_user", {
+                "user_id": original_user_id,
+                "preferences": None
+            })
+            assert response.get(
+                "success"), f"Failed to clear preferences: {response}"
+
+            # Validate preferences cleared
+            updated_users = self.get_users({'user_id': original_user_id})
+            updated_user = updated_users[0]
+            # Should be null or empty
+            assert updated_user.get('preferences') in [None, '', '{}']
+
+        finally:
+            # Step 5: Restore original values
+            restore_data = {"user_id": original_user_id}
+            if original_preferences is not None:
+                restore_data["preferences"] = original_preferences
+            if original_primary_client_group_id is not None:
+                restore_data["primary_client_group_id"] = original_primary_client_group_id
+
+            if len(restore_data) > 1:  # More than just user_id
+                response = self.api_call("/update_user", restore_data)
+                assert response.get(
+                    "success"), f"Failed to restore user: {response}"
+
+            # Final validation - ensure restoration
+            final_users = self.get_users({'user_id': original_user_id})
+            final_user = final_users[0]
+            assert final_user.get('preferences') == original_preferences
+            assert final_user.get(
+                'primary_client_group_id') == original_primary_client_group_id

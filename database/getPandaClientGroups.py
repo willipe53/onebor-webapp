@@ -33,7 +33,7 @@ def lambda_handler(event, context):
         params = []
 
         if user_id:
-            query = """SELECT cg.client_group_id,cg.name
+            query = """SELECT cg.client_group_id,cg.name,cg.preferences
                      FROM client_groups cg
                      JOIN client_group_users cgu ON cg.client_group_id=cgu.client_group_id
                      WHERE cgu.user_id=%s"""
@@ -43,7 +43,7 @@ def lambda_handler(event, context):
                     ("LIKE %s" if group_name.endswith("%") else "= %s")
                 params.append(group_name)
         else:
-            query = "SELECT client_group_id,name FROM client_groups WHERE 1=1"
+            query = "SELECT client_group_id,name,preferences FROM client_groups WHERE 1=1"
             if client_group_id:
                 query += " AND client_group_id=%s"
                 params.append(client_group_id)
