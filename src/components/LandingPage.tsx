@@ -49,14 +49,14 @@ const LandingPage: React.FC = () => {
       {/* Toolbar with Login/Signup buttons */}
       <Toolbar id="toolbar">
         <Button
-          variant="outlined"
+          variant="contained"
           sx={{ mr: 2 }}
-          onClick={() => setLoginOpen(true)}
+          onClick={() => setSignupOpen(true)}
         >
-          Login
-        </Button>
-        <Button variant="contained" onClick={() => setSignupOpen(true)}>
           Sign Up
+        </Button>
+        <Button variant="outlined" onClick={() => setLoginOpen(true)}>
+          Login
         </Button>
       </Toolbar>
 

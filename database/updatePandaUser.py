@@ -31,8 +31,17 @@ def lambda_handler(event, context):
         s = get_db_secret()
         conn = get_connection(s)
 
-        # Build dynamic query to handle optional fields
+        # Check if user exists in database
+        user_exists = False
         if user_id:
+            with conn.cursor() as check_cursor:
+                check_cursor.execute(
+                    "SELECT COUNT(*) as count FROM users WHERE user_id = %s", (user_id,))
+                result = check_cursor.fetchone()
+                user_exists = result['count'] > 0
+
+        # Build dynamic query to handle optional fields
+        if user_exists:
             # Update existing user
             updates = []
             params = []
@@ -66,9 +75,10 @@ def lambda_handler(event, context):
                 return {"statusCode": 400, "headers": {"Content-Type": "application/json"},
                         "body": json.dumps({"error": "email and name are required for new users"})}
 
-            # Generate new user_id if not provided
-            import uuid
-            user_id = str(uuid.uuid4())
+            # Generate new user_id if not provided, otherwise use the provided one
+            if not user_id:
+                import uuid
+                user_id = str(uuid.uuid4())
 
             q = """INSERT INTO users (user_id, email, name, preferences, primary_client_group_id) 
                    VALUES (%s, %s, %s, %s, %s)"""
@@ -84,12 +94,26 @@ def lambda_handler(event, context):
                       preferences_json, primary_client_group_id]
 
         with conn.cursor() as c:
-            c.execute(q, params)
-            conn.commit()
+            try:
+                c.execute(q, params)
+                rows_affected = c.rowcount
+                conn.commit()
 
-            # Return the user_id for reference
-            return {"statusCode": 200, "headers": {"Content-Type": "application/json"},
-                    "body": json.dumps({"success": True, "user_id": user_id})}
+                # Return the user_id for reference
+                return {"statusCode": 200, "headers": {"Content-Type": "application/json"},
+                        "body": json.dumps({"success": True, "user_id": user_id})}
+            except pymysql.IntegrityError as ie:
+                # Handle duplicate key or other integrity constraint violations
+                error_msg = str(ie)
+                if "Duplicate entry" in error_msg and "PRIMARY" in error_msg:
+                    # User already exists - this is actually OK for our use case
+                    # Just return success with the existing user_id
+                    return {"statusCode": 200, "headers": {"Content-Type": "application/json"},
+                            "body": json.dumps({"success": True, "user_id": user_id, "note": "User already exists"})}
+                else:
+                    # Other integrity constraint violations
+                    return {"statusCode": 400, "headers": {"Content-Type": "application/json"},
+                            "body": json.dumps({"error": f"Database constraint violation: {error_msg}"})}
     except Exception as e:
         return {"statusCode": 500, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"error": str(e)})}
     finally:

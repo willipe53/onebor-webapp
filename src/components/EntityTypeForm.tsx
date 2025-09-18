@@ -12,7 +12,6 @@ import {
   Snackbar,
   Chip,
 } from "@mui/material";
-import { HexColorPicker } from "react-colorful";
 import AceEditor from "react-ace";
 
 // Import JSON mode and theme for ace editor
@@ -34,6 +33,26 @@ interface EntityTypeFormProps {
   editingEntityType?: EntityType;
   onClose?: () => void;
 }
+
+// Predefined color palette similar to the image
+const COLOR_PALETTE = [
+  "#f44336", // Red
+  "#e91e63", // Pink
+  "#9c27b0", // Purple
+  "#673ab7", // Deep Purple
+  "#3f51b5", // Indigo
+  "#2196f3", // Blue
+  "#03a9f4", // Light Blue
+  "#00bcd4", // Cyan
+  "#009688", // Teal
+  "#4caf50", // Green
+  "#8bc34a", // Light Green
+  "#cddc39", // Lime
+  "#ffeb3b", // Yellow
+  "#ffc107", // Amber
+  "#ff9800", // Orange
+  "#ff5722", // Deep Orange
+];
 
 const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
   editingEntityType,
@@ -348,7 +367,6 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
                       position: "absolute",
                       top: "100%",
                       left: 0,
-                      right: 0,
                       mt: 1,
                       p: 2,
                       border: "1px solid #ccc",
@@ -358,10 +376,63 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
                       zIndex: 1000,
                     }}
                   >
-                    <HexColorPicker
-                      color={labelColor}
-                      onChange={setLabelColor}
-                    />
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mb: 1, display: "block" }}
+                    >
+                      Select color:
+                    </Typography>
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(4, 1fr)",
+                        gap: 0.5,
+                        maxWidth: 200,
+                      }}
+                    >
+                      {COLOR_PALETTE.map((color) => (
+                        <Box
+                          key={color}
+                          sx={{
+                            width: 40,
+                            height: 40,
+                            backgroundColor: color,
+                            border:
+                              labelColor === color
+                                ? "3px solid #000"
+                                : "2px solid #ccc",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            "&:hover": {
+                              borderColor: "#666",
+                              transform: "scale(1.05)",
+                            },
+                          }}
+                          onClick={() => {
+                            setLabelColor(color);
+                            setShowColorPicker(false);
+                          }}
+                        >
+                          {labelColor === color && (
+                            <Typography
+                              sx={{
+                                color: "white",
+                                fontSize: "16px",
+                                fontWeight: "bold",
+                                textShadow: "1px 1px 2px rgba(0,0,0,0.7)",
+                              }}
+                            >
+                              ✓
+                            </Typography>
+                          )}
+                        </Box>
+                      ))}
+                    </Box>
                     <Box sx={{ mt: 1, textAlign: "center" }}>
                       <Button
                         size="small"

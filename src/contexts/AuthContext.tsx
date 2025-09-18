@@ -10,6 +10,8 @@ import { userPool } from "../config/cognito";
 interface AuthContextType {
   user: CognitoUser | null;
   userEmail: string | null;
+  userName: string | null;
+  userId: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -41,6 +43,8 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<CognitoUser | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -53,8 +57,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           return;
         }
         if (session && session.isValid()) {
+          const idToken = session.getIdToken();
+          const payload = idToken.payload;
           setUser(currentUser);
-          setUserEmail(session.getIdToken().payload.email);
+          setUserEmail(payload.email);
+          setUserName(
+            payload.name ||
+              payload.given_name ||
+              payload.email?.split("@")[0] ||
+              ""
+          );
+          setUserId(payload.sub);
         }
         setIsLoading(false);
       });
@@ -77,8 +90,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       cognitoUser.authenticateUser(authenticationDetails, {
         onSuccess: (session) => {
+          const idToken = session.getIdToken();
+          const payload = idToken.payload;
           setUser(cognitoUser);
-          setUserEmail(session.getIdToken().payload.email);
+          setUserEmail(payload.email);
+          setUserName(
+            payload.name ||
+              payload.given_name ||
+              payload.email?.split("@")[0] ||
+              ""
+          );
+          setUserId(payload.sub);
           resolve();
         },
         onFailure: (err) => {
@@ -209,11 +231,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     setUser(null);
     setUserEmail(null);
+    setUserName(null);
+    setUserId(null);
   };
 
   const value: AuthContextType = {
     user,
     userEmail,
+    userName,
+    userId,
     isAuthenticated: !!user,
     isLoading,
     login,

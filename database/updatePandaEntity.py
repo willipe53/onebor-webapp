@@ -33,6 +33,15 @@ def lambda_handler(event, context):
         elif not body:
             body = event
 
+        # Extract user_id from the request (should be passed from frontend)
+        user_id = body.get("user_id")
+        if not user_id:
+            return {
+                "statusCode": 400,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"error": "user_id is required for data protection"})
+            }
+
         entity_id = body.get("entity_id")
         name = body.get("name")
         entity_type_id = body.get("entity_type_id")
@@ -41,7 +50,7 @@ def lambda_handler(event, context):
 
         # Debug logging
         print(
-            f"DEBUG: entity_id={entity_id}, name={name}, entity_type_id={entity_type_id}")
+            f"DEBUG: user_id={user_id}, entity_id={entity_id}, name={name}, entity_type_id={entity_type_id}")
         print(
             f"DEBUG: parent_entity_id={parent_entity_id}, attributes={attributes}")
 
@@ -51,14 +60,22 @@ def lambda_handler(event, context):
         with conn.cursor() as cursor:
             if entity_id:
                 # --- UPDATE existing record ---
-                # First check if entity exists
-                cursor.execute(
-                    "SELECT * FROM entities WHERE entity_id = %s", (entity_id,))
+                # First check if entity exists AND user has access to it
+                cursor.execute("""
+                    SELECT e.* FROM entities e
+                    JOIN client_group_entities cge ON e.entity_id = cge.entity_id
+                    JOIN client_group_users cgu ON cge.client_group_id = cgu.client_group_id
+                    WHERE e.entity_id = %s AND cgu.user_id = %s
+                """, (entity_id, user_id))
                 existing_entity = cursor.fetchone()
-                print(f"DEBUG: Existing entity: {existing_entity}")
+                print(f"DEBUG: Existing entity with access: {existing_entity}")
 
                 if not existing_entity:
-                    return {"statusCode": 404, "body": json.dumps({"error": f"Entity with ID {entity_id} not found"})}
+                    return {
+                        "statusCode": 404,
+                        "headers": {"Content-Type": "application/json"},
+                        "body": json.dumps({"error": f"Entity with ID {entity_id} not found or access denied"})
+                    }
                 updates = []
                 params = []
 
@@ -114,6 +131,29 @@ def lambda_handler(event, context):
 
             else:
                 # --- INSERT new record ---
+                # For new entities, we need a client_group_id to associate the entity with
+                client_group_id = body.get("client_group_id")
+                if not client_group_id:
+                    return {
+                        "statusCode": 400,
+                        "headers": {"Content-Type": "application/json"},
+                        "body": json.dumps({"error": "client_group_id is required for creating new entities"})
+                    }
+
+                # Validate that the user belongs to the specified client group
+                cursor.execute("""
+                    SELECT COUNT(*) as count FROM client_group_users 
+                    WHERE client_group_id = %s AND user_id = %s
+                """, (client_group_id, user_id))
+                access_check = cursor.fetchone()
+
+                if access_check['count'] == 0:
+                    return {
+                        "statusCode": 403,
+                        "headers": {"Content-Type": "application/json"},
+                        "body": json.dumps({"error": "Access denied: User does not belong to the specified client group"})
+                    }
+
                 sql = """
                     INSERT INTO entities (name, entity_type_id, parent_entity_id, attributes)
                     VALUES (%s, %s, %s, %s)
@@ -141,6 +181,14 @@ def lambda_handler(event, context):
                 )
                 conn.commit()
                 new_id = cursor.lastrowid
+
+                # Associate the new entity with the client group
+                cursor.execute("""
+                    INSERT INTO client_group_entities (client_group_id, entity_id)
+                    VALUES (%s, %s)
+                """, (client_group_id, new_id))
+                conn.commit()
+
                 result = {"message": "Entity created", "entity_id": new_id}
 
         return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps(result)}

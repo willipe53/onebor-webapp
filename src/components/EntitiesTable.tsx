@@ -17,11 +17,15 @@ import type {
   GridRowParams,
 } from "@mui/x-data-grid";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "../contexts/AuthContext";
 import * as apiService from "../services/api";
 import EntityForm from "./EntityForm";
 
 const EntitiesTable: React.FC = () => {
-  const [filters, setFilters] = useState<apiService.QueryEntitiesRequest>({});
+  const { userId } = useAuth();
+  const [filters, setFilters] = useState<
+    Partial<apiService.QueryEntitiesRequest>
+  >({ user_id: userId! });
   const [nameFilter, setNameFilter] = useState("");
   const [entityIdFilter, setEntityIdFilter] = useState("");
   const [entityTypeFilter, setEntityTypeFilter] = useState("");
@@ -36,8 +40,9 @@ const EntitiesTable: React.FC = () => {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["entities", filters],
-    queryFn: () => apiService.queryEntities(filters),
+    queryKey: ["entities", filters, userId],
+    queryFn: () => apiService.queryEntities({ ...filters, user_id: userId! }),
+    enabled: !!userId, // Only run query when user is authenticated
   });
 
   // Transform array data to objects if needed
@@ -332,11 +337,11 @@ const EntitiesTable: React.FC = () => {
       newFilters.entity_type_id = parseInt(entityTypeFilter);
     if (parentEntityFilter)
       newFilters.parent_entity_id = parseInt(parentEntityFilter);
-    setFilters(newFilters);
+    setFilters({ ...newFilters, user_id: userId! });
   };
 
   const clearFilters = () => {
-    setFilters({});
+    setFilters({ user_id: userId! });
     setNameFilter("");
     setEntityIdFilter("");
     setEntityTypeFilter("");

@@ -19,6 +19,7 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "../contexts/AuthContext";
 import * as apiService from "../services/api";
 import { prettyPrint, isValidEmail, formatDateForInput } from "../utils";
 import AceEditor from "react-ace";
@@ -39,6 +40,7 @@ interface EntityFormProps {
 }
 
 const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
+  const { userId } = useAuth();
   const [name, setName] = useState("");
   const [selectedParentEntity, setSelectedParentEntity] =
     useState<apiService.Entity | null>(null);
@@ -53,6 +55,15 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
 
   const queryClient = useQueryClient();
 
+  // Fetch user data to get primary client group
+  const { data: users } = useQuery({
+    queryKey: ["users", userId],
+    queryFn: () => apiService.queryUsers({ user_id: userId! }),
+    enabled: !!userId,
+  });
+
+  const currentUser = users && users.length > 0 ? users[0] : null;
+
   // Fetch entity types for the dropdown
   const { data: rawEntityTypesData, isLoading: entityTypesLoading } = useQuery({
     queryKey: ["entity-types"],
@@ -61,8 +72,9 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
 
   // Fetch entities for parent dropdown
   const { data: rawEntitiesData, isLoading: entitiesLoading } = useQuery({
-    queryKey: ["entities"],
-    queryFn: () => apiService.queryEntities({}),
+    queryKey: ["entities", userId],
+    queryFn: () => apiService.queryEntities({ user_id: userId! }),
+    enabled: !!userId,
   });
 
   // Transform array data to objects if needed
@@ -295,9 +307,13 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
   };
 
   const mutation = useMutation({
-    mutationFn: editingEntity
-      ? apiService.updateEntity
-      : apiService.createEntity,
+    mutationFn: (data: apiService.UpdateEntityRequest) => {
+      if (editingEntity) {
+        return apiService.updateEntity(data);
+      } else {
+        return apiService.createEntity(data as apiService.CreateEntityRequest);
+      }
+    },
     onSuccess: () => {
       if (!editingEntity) {
         // Reset form only for create mode
@@ -392,6 +408,7 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
 
     // Prepare request data
     const requestData: apiService.UpdateEntityRequest = {
+      user_id: userId!,
       name,
       entity_type_id: selectedEntityType?.entity_type_id,
       parent_entity_id: selectedParentEntity?.entity_id || null,
@@ -401,6 +418,16 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
     // Add entity_id for updates
     if (editingEntity) {
       requestData.entity_id = editingEntity.entity_id;
+    } else {
+      // For new entities, add client_group_id
+      if (!currentUser?.primary_client_group_id) {
+        setErrors({
+          general:
+            "No client group assigned. Please contact your administrator.",
+        });
+        return;
+      }
+      requestData.client_group_id = currentUser.primary_client_group_id;
     }
 
     mutation.mutate(requestData);
