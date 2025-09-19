@@ -155,7 +155,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         Pool: userPool,
       });
 
-      cognitoUser.confirmRegistration(confirmationCode, true, (err, result) => {
+      cognitoUser.confirmRegistration(confirmationCode, true, (err) => {
         if (err) {
           // Dispatch custom event for error handling
           window.dispatchEvent(

@@ -11,7 +11,6 @@ interface OnboardingState {
 
 export const useClientGroupOnboarding = (
   userEmail: string | null,
-  userName: string | null,
   cognitoUserId: string | null
 ) => {
   const [state, setState] = useState<OnboardingState>({
@@ -31,7 +30,7 @@ export const useClientGroupOnboarding = (
     queryKey: ["user", cognitoUserId],
     queryFn: () => {
       if (!cognitoUserId) return Promise.resolve([]);
-      return apiService.queryUsers({ user_id: cognitoUserId });
+      return apiService.queryUsers({ sub: cognitoUserId });
     },
     enabled: !!cognitoUserId && !!userEmail,
   });
@@ -49,14 +48,16 @@ export const useClientGroupOnboarding = (
   // Mutation to update user's primary client group
   const assignClientGroupMutation = useMutation({
     mutationFn: ({
-      userId,
+      userDbId,
       clientGroupId,
     }: {
-      userId: string;
+      userDbId: number;
       clientGroupId: number;
     }) =>
       apiService.updateUser({
-        user_id: userId,
+        user_id: userDbId,
+        sub: cognitoUserId!,
+        email: userEmail!,
         primary_client_group_id: clientGroupId,
       }),
     onSuccess: () => {
@@ -66,7 +67,12 @@ export const useClientGroupOnboarding = (
   });
 
   useEffect(() => {
-    if (!cognitoUserId || !userEmail || !userName) {
+    console.log("🔍 useClientGroupOnboarding - Parameters:", {
+      cognitoUserId,
+      userEmail,
+    });
+    if (!cognitoUserId || !userEmail) {
+      console.log("❌ useClientGroupOnboarding - Missing required parameters");
       setState({
         isLoading: false,
         needsOnboarding: false,
@@ -104,21 +110,19 @@ export const useClientGroupOnboarding = (
 
         // Check if user exists
         const existingUsers = users || [];
-        let currentUser = existingUsers.find(
-          (u) => u.user_id === cognitoUserId
-        );
+        let currentUser = existingUsers.find((u) => u.sub === cognitoUserId);
 
         if (currentUser) {
-          // User exists - update email and name if needed
+          // User exists - update sub and email if needed
           if (
             currentUser.email !== userEmail ||
-            currentUser.name !== userName
+            currentUser.sub !== cognitoUserId
           ) {
             try {
-              const updateResult = await updateUserMutation.mutateAsync({
-                user_id: cognitoUserId,
+              await updateUserMutation.mutateAsync({
+                user_id: currentUser.user_id,
+                sub: cognitoUserId,
                 email: userEmail,
-                name: userName,
               });
               // Invalidate cache and refetch to get updated data
               queryClient.invalidateQueries({
@@ -127,9 +131,9 @@ export const useClientGroupOnboarding = (
               const updatedUsers = await refetchUser();
 
               currentUser =
-                updatedUsers.data?.find((u) => u.user_id === cognitoUserId) ||
+                updatedUsers.data?.find((u) => u.sub === cognitoUserId) ||
                 currentUser;
-            } catch (userUpdateError) {
+            } catch (userUpdateError: any) {
               console.error("Failed to update user:", userUpdateError);
               throw new Error(
                 `Failed to update user: ${userUpdateError.message}`
@@ -138,12 +142,24 @@ export const useClientGroupOnboarding = (
           }
         } else {
           // User doesn't exist - create new user
+          console.log("🔍 Creating user with:", {
+            sub: cognitoUserId,
+            email: userEmail,
+          });
+
+          // Validate required fields before making API call
+          if (!cognitoUserId || !userEmail) {
+            throw new Error(
+              `Missing required fields: sub=${!!cognitoUserId}, email=${!!userEmail}`
+            );
+          }
+
           try {
-            await updateUserMutation.mutateAsync({
-              user_id: cognitoUserId,
+            const createUserData: apiService.CreateUserRequest = {
+              sub: cognitoUserId,
               email: userEmail,
-              name: userName,
-            });
+            };
+            await updateUserMutation.mutateAsync(createUserData);
 
             // Invalidate cache and refetch to get the new user data
             queryClient.invalidateQueries({
@@ -153,9 +169,9 @@ export const useClientGroupOnboarding = (
 
             const updatedUsers = await refetchUser();
             currentUser = updatedUsers.data?.find(
-              (u) => u.user_id === cognitoUserId
+              (u) => u.sub === cognitoUserId
             );
-          } catch (userCreationError) {
+          } catch (userCreationError: any) {
             console.error("Failed to create user:", userCreationError);
             throw new Error(
               `Failed to create user: ${userCreationError.message}`
@@ -193,15 +209,15 @@ export const useClientGroupOnboarding = (
     };
 
     handleUserCheck();
-  }, [cognitoUserId, userEmail, userName, users]);
+  }, [cognitoUserId, userEmail, users]);
 
   const completeOnboarding = async (clientGroupId: number) => {
-    if (!cognitoUserId) {
-      throw new Error("No user ID available");
+    if (!state.user?.user_id) {
+      throw new Error("No user database ID available");
     }
 
     await assignClientGroupMutation.mutateAsync({
-      userId: cognitoUserId,
+      userDbId: state.user.user_id,
       clientGroupId,
     });
 

@@ -23,8 +23,8 @@ def lambda_handler(event, context):
             body = event
 
         user_id = body.get("user_id")
+        sub = body.get("sub")  # Cognito user ID
         email = body.get("email")
-        name = body.get("name")
         preferences = body.get("preferences")
         primary_client_group_id = body.get("primary_client_group_id")
 
@@ -32,13 +32,32 @@ def lambda_handler(event, context):
         conn = get_connection(s)
 
         # Check if user exists in database
+        # Try to find user by sub first (Cognito ID), then by user_id, then by email
         user_exists = False
-        if user_id:
-            with conn.cursor() as check_cursor:
+        existing_user_id = None
+
+        with conn.cursor() as check_cursor:
+            if sub:
                 check_cursor.execute(
-                    "SELECT COUNT(*) as count FROM users WHERE user_id = %s", (user_id,))
+                    "SELECT user_id FROM users WHERE sub = %s", (sub,))
                 result = check_cursor.fetchone()
-                user_exists = result['count'] > 0
+                if result:
+                    user_exists = True
+                    existing_user_id = result['user_id']
+            elif user_id:
+                check_cursor.execute(
+                    "SELECT user_id FROM users WHERE user_id = %s", (user_id,))
+                result = check_cursor.fetchone()
+                if result:
+                    user_exists = True
+                    existing_user_id = result['user_id']
+            elif email:
+                check_cursor.execute(
+                    "SELECT user_id FROM users WHERE email = %s", (email,))
+                result = check_cursor.fetchone()
+                if result:
+                    user_exists = True
+                    existing_user_id = result['user_id']
 
         # Build dynamic query to handle optional fields
         if user_exists:
@@ -46,12 +65,14 @@ def lambda_handler(event, context):
             updates = []
             params = []
 
-            if email is not None:
-                updates.append("email = %s")
-                params.append(email)
-            if name is not None:
-                updates.append("name = %s")
-                params.append(name)
+            # Require sub and email for updates
+            if sub is None or email is None:
+                return {"statusCode": 400, "headers": {"Content-Type": "application/json"},
+                        "body": json.dumps({"error": "sub and email are required fields"})}
+            updates.append("sub = %s")
+            params.append(sub)
+            updates.append("email = %s")
+            params.append(email)
             if preferences is not None:
                 updates.append("preferences = %s")
                 # Handle JSON serialization
@@ -68,20 +89,16 @@ def lambda_handler(event, context):
                         "body": json.dumps({"error": "No fields to update"})}
 
             q = f"UPDATE users SET {', '.join(updates)} WHERE user_id = %s"
-            params.append(user_id)
+            params.append(existing_user_id)
         else:
-            # Insert new user (user_id, email, name are required for new users)
-            if not email or not name:
+            # Insert new user (sub and email are required for new users)
+            if not sub or not email:
                 return {"statusCode": 400, "headers": {"Content-Type": "application/json"},
-                        "body": json.dumps({"error": "email and name are required for new users"})}
+                        "body": json.dumps({"error": "sub and email are required for new users"})}
 
-            # Generate new user_id if not provided, otherwise use the provided one
-            if not user_id:
-                import uuid
-                user_id = str(uuid.uuid4())
-
-            q = """INSERT INTO users (user_id, email, name, preferences, primary_client_group_id) 
-                   VALUES (%s, %s, %s, %s, %s)"""
+            # With auto-increment user_id, we don't need to generate one
+            q = """INSERT INTO users (sub, email, preferences, primary_client_group_id) 
+                   VALUES (%s, %s, %s, %s)"""
 
             preferences_json = None
             if preferences is not None:
@@ -90,8 +107,7 @@ def lambda_handler(event, context):
                 else:
                     preferences_json = preferences
 
-            params = [user_id, email, name,
-                      preferences_json, primary_client_group_id]
+            params = [sub, email, preferences_json, primary_client_group_id]
 
         with conn.cursor() as c:
             try:
@@ -100,6 +116,13 @@ def lambda_handler(event, context):
                 conn.commit()
 
                 # Return the user_id for reference
+                # For new users, get the auto-generated user_id
+                if not user_exists:
+                    new_user_id = c.lastrowid
+                    user_id = new_user_id
+                else:
+                    user_id = existing_user_id
+
                 return {"statusCode": 200, "headers": {"Content-Type": "application/json"},
                         "body": json.dumps({"success": True, "user_id": user_id})}
             except pymysql.IntegrityError as ie:

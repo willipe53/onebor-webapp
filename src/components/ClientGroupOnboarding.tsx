@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -20,6 +20,7 @@ interface ClientGroupOnboardingProps {
   userId: string;
   onComplete: (clientGroupId: number) => void;
   onCancel: () => void;
+  prefilledInvitationCode?: string;
 }
 
 const ClientGroupOnboarding: React.FC<ClientGroupOnboardingProps> = ({
@@ -28,44 +29,74 @@ const ClientGroupOnboarding: React.FC<ClientGroupOnboardingProps> = ({
   userId,
   onComplete,
   onCancel,
+  prefilledInvitationCode,
 }) => {
   const [step, setStep] = useState<
     "prompt" | "invitation-code" | "create-group" | "error"
-  >("prompt");
+  >(prefilledInvitationCode ? "invitation-code" : "prompt");
   const [organizationName, setOrganizationName] = useState("");
-  const [invitationCode, setInvitationCode] = useState("");
+  const [invitationCode, setInvitationCode] = useState(
+    prefilledInvitationCode || ""
+  );
   const [error, setError] = useState<string>("");
 
   // Query to get user's current client groups
   const { data: userClientGroups } = useQuery({
     queryKey: ["user-client-groups", userId],
-    queryFn: () => apiService.queryClientGroups({ user_id: userId }),
+    queryFn: () => apiService.queryClientGroups({ user_id: parseInt(userId) }),
     enabled: !!userId,
   });
 
   const createClientGroupMutation = useMutation({
-    mutationFn: (data: apiService.CreateClientGroupRequest) =>
-      apiService.updateClientGroup(data),
+    mutationFn: async (data: apiService.CreateClientGroupRequest) => {
+      console.log("🔍 Creating client group with data:", data);
+
+      // First create the client group
+      const result = await apiService.updateClientGroup(data);
+      console.log("✅ Client group created:", result);
+
+      // Get the current user's database ID (userId is Cognito UUID, we need database ID)
+      console.log("🔍 Getting user database ID for Cognito ID:", userId);
+      const currentUserData = await apiService.queryUsers({ sub: userId });
+      if (!currentUserData || currentUserData.length === 0) {
+        throw new Error("User not found in database");
+      }
+      const databaseUserId = currentUserData[0].user_id;
+      console.log("✅ Found database user_id:", databaseUserId);
+
+      // Then add the user to the newly created group
+      console.log("🔍 Adding user to group:", {
+        client_group_id: result.id,
+        user_id: databaseUserId,
+        add_or_remove: "add",
+      });
+
+      const membershipResult = await apiService.modifyClientGroupMembership({
+        client_group_id: result.id,
+        user_id: databaseUserId,
+        add_or_remove: "add",
+      });
+      console.log("✅ Membership result:", membershipResult);
+
+      return result;
+    },
     onSuccess: (result) => {
       onComplete(result.id);
     },
     onError: (error: Error) => {
-      setError(
-        error.message ||
-          "Failed to create client organization. Please try again."
-      );
+      const friendlyMessage = apiService.parseApiError(error);
+      setError(friendlyMessage);
       setStep("error");
     },
   });
 
   const validateInvitationMutation = useMutation({
     mutationFn: () =>
-      apiService.manageInvitation({ action: "get", email: userEmail }),
+      apiService.manageInvitation({ action: "get", code: invitationCode }),
     onSuccess: (invitations) => {
       const invitation = Array.isArray(invitations)
         ? invitations.find(
-            (inv: apiService.Invitation) =>
-              inv.code === invitationCode && !inv.redeemed
+            (inv: apiService.Invitation) => inv.code === invitationCode
           )
         : null;
 
@@ -85,8 +116,9 @@ const ClientGroupOnboarding: React.FC<ClientGroupOnboardingProps> = ({
       // Proceed with redemption
       redeemInvitationMutation.mutate(invitation);
     },
-    onError: () => {
-      setError("Failed to validate invitation code. Please try again.");
+    onError: (error: Error) => {
+      const friendlyMessage = apiService.parseApiError(error);
+      setError(friendlyMessage);
     },
   });
 
@@ -94,8 +126,8 @@ const ClientGroupOnboarding: React.FC<ClientGroupOnboardingProps> = ({
     mutationFn: async (invitation: apiService.Invitation) => {
       // Add user to client group
       await apiService.modifyClientGroupMembership({
-        client_group_id: invitation.primary_client_group_id,
-        user_id: userId,
+        client_group_id: invitation.client_group_id,
+        user_id: parseInt(userId),
         add_or_remove: "add",
       });
 
@@ -103,8 +135,8 @@ const ClientGroupOnboarding: React.FC<ClientGroupOnboardingProps> = ({
       const currentGroups = userClientGroups || [];
       if (currentGroups.length === 0) {
         await apiService.updateUser({
-          user_id: userId,
-          primary_client_group_id: invitation.primary_client_group_id,
+          user_id: parseInt(userId),
+          primary_client_group_id: invitation.client_group_id,
         });
       }
 
@@ -114,13 +146,14 @@ const ClientGroupOnboarding: React.FC<ClientGroupOnboardingProps> = ({
         code: invitation.code,
       });
 
-      return invitation.primary_client_group_id;
+      return invitation.client_group_id;
     },
     onSuccess: (clientGroupId) => {
       onComplete(clientGroupId);
     },
-    onError: () => {
-      setError("Failed to redeem invitation. Please try again.");
+    onError: (error: Error) => {
+      const friendlyMessage = apiService.parseApiError(error);
+      setError(friendlyMessage);
     },
   });
 
@@ -135,7 +168,7 @@ const ClientGroupOnboarding: React.FC<ClientGroupOnboardingProps> = ({
     });
   };
 
-  const handleValidateInvitation = () => {
+  const handleValidateInvitation = useCallback(() => {
     if (!invitationCode.trim()) {
       setError("Invitation code is required");
       return;
@@ -143,7 +176,7 @@ const ClientGroupOnboarding: React.FC<ClientGroupOnboardingProps> = ({
 
     setError("");
     validateInvitationMutation.mutate();
-  };
+  }, [invitationCode, validateInvitationMutation]);
 
   const handleCancel = () => {
     setStep("error");
@@ -155,6 +188,24 @@ const ClientGroupOnboarding: React.FC<ClientGroupOnboardingProps> = ({
     setOrganizationName("");
     setInvitationCode("");
   };
+
+  // Auto-validate when prefilled invitation code is provided
+  React.useEffect(() => {
+    if (
+      prefilledInvitationCode &&
+      step === "invitation-code" &&
+      invitationCode &&
+      !validateInvitationMutation.isPending
+    ) {
+      handleValidateInvitation();
+    }
+  }, [
+    prefilledInvitationCode,
+    step,
+    invitationCode,
+    validateInvitationMutation.isPending,
+    handleValidateInvitation,
+  ]);
 
   return (
     <Dialog
@@ -346,24 +397,32 @@ const ClientGroupOnboarding: React.FC<ClientGroupOnboardingProps> = ({
         <>
           <DialogTitle sx={{ pb: 2 }}>
             <Typography variant="h5" component="div" sx={{ fontWeight: 600 }}>
-              Access Denied
+              {error &&
+              error.includes("organization name") &&
+              error.includes("already in use")
+                ? "Unable to Create Organization"
+                : "Access Denied"}
             </Typography>
           </DialogTitle>
           <DialogContent>
             <Alert severity="error" sx={{ mb: 3 }}>
               <Typography variant="body1" sx={{ lineHeight: 1.6 }}>
-                We are sorry we cannot give you access to OneBor without
-                assigning you to a client organization.
+                {error &&
+                error.includes("organization name") &&
+                error.includes("already in use")
+                  ? error
+                  : "We are sorry we cannot give you access to OneBor without assigning you to a client organization."}
               </Typography>
             </Alert>
-            <Typography variant="body1" sx={{ lineHeight: 1.6 }}>
-              Please contact the person at your firm who administers OneBor for
-              further instructions.
-            </Typography>
-            {error && (
-              <Alert severity="warning" sx={{ mt: 2 }}>
-                <Typography variant="body2">{error}</Typography>
-              </Alert>
+            {!(
+              error &&
+              error.includes("organization name") &&
+              error.includes("already in use")
+            ) && (
+              <Typography variant="body1" sx={{ lineHeight: 1.6 }}>
+                Please contact the person at your firm who administers OneBor
+                for further instructions.
+              </Typography>
             )}
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>

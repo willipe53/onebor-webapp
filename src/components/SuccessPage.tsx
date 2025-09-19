@@ -31,17 +31,21 @@ const HeaderLogo = styled("img")({
 });
 
 const SuccessPage: React.FC = () => {
-  const { userEmail, userName, userId, logout } = useAuth();
+  const { userEmail, userId, logout } = useAuth();
   const [currentTab, setCurrentTab] = useState(0);
   const [inviteUserOpen, setInviteUserOpen] = useState(false);
 
   // Client group onboarding logic
+  console.log("🔍 SuccessPage - Calling useClientGroupOnboarding with:", {
+    userEmail,
+    userId,
+  });
   const {
     isLoading: onboardingLoading,
     needsOnboarding,
     user,
     completeOnboarding,
-  } = useClientGroupOnboarding(userEmail, userName, userId);
+  } = useClientGroupOnboarding(userEmail, userId);
 
   // Query to get client group information
   const { data: clientGroups } = useQuery({

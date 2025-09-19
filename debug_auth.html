@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Debug Auth</title>
+    <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.7/dist/amazon-cognito-identity.min.js"></script>
+  </head>
+  <body>
+    <h1>Debug Authentication</h1>
+    <div id="status">Checking authentication...</div>
+
+    <script>
+      // Use your actual User Pool ID and Client ID
+      const poolData = {
+        UserPoolId: "us-east-2_IJ1C0mWXW",
+        ClientId: "1lntksiqrqhmjea6obrrrrnmh1",
+      };
+
+      const userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
+      const statusDiv = document.getElementById("status");
+
+      function log(message) {
+        console.log(message);
+        statusDiv.innerHTML += "<br>" + message;
+      }
+
+      // Check current user
+      const currentUser = userPool.getCurrentUser();
+
+      if (currentUser) {
+        log("✅ Current user found: " + currentUser.getUsername());
+
+        currentUser.getSession((err, session) => {
+          if (err) {
+            log("❌ Session error: " + err.message);
+            return;
+          }
+
+          if (session && session.isValid()) {
+            log("✅ Session is valid");
+            const idToken = session.getIdToken();
+            const jwtToken = idToken.getJwtToken();
+
+            log("✅ JWT Token length: " + jwtToken.length);
+            log("✅ Token starts with: " + jwtToken.substring(0, 50) + "...");
+
+            // Test API call
+            log("🔄 Testing API call...");
+
+            fetch("/api/get_users", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + jwtToken,
+              },
+              body: JSON.stringify({}),
+            })
+              .then((response) => {
+                log("📡 API Response status: " + response.status);
+                return response.text();
+              })
+              .then((text) => {
+                log("📡 API Response body: " + text);
+              })
+              .catch((error) => {
+                log("❌ API Error: " + error.message);
+              });
+          } else {
+            log("❌ Session is not valid");
+          }
+        });
+      } else {
+        log("❌ No current user found");
+        log("ℹ️ You need to log in first");
+      }
+    </script>
+  </body>
+</html>

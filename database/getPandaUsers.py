@@ -33,8 +33,8 @@ def lambda_handler(event, context):
             body = event
 
         user_id = body.get("user_id")
+        sub = body.get("sub")  # Cognito user ID
         email = body.get("email")
-        name = body.get("name")
 
         secrets = get_db_secret()
         conn = get_connection(secrets)
@@ -46,19 +46,16 @@ def lambda_handler(event, context):
             query += " AND user_id = %s"
             params.append(user_id)
 
+        if sub:
+            query += " AND sub = %s"
+            params.append(sub)
+
         if email:
             if email.endswith("%"):
                 query += " AND email LIKE %s"
             else:
                 query += " AND email = %s"
             params.append(email)
-
-        if name:
-            if name.endswith("%"):
-                query += " AND name LIKE %s"
-            else:
-                query += " AND name = %s"
-            params.append(name)
 
         with conn.cursor() as cursor:
             cursor.execute(query, params)

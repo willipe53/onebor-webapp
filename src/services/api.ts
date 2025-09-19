@@ -1,6 +1,9 @@
 import { userPool } from "../config/cognito";
 
-const API_BASE_URL = "/api"; // Use proxy in development
+// Use actual AWS API Gateway URL in production, proxy in development
+const API_BASE_URL = import.meta.env.PROD 
+  ? "https://zwkvk3lyl3.execute-api.us-east-2.amazonaws.com/dev"
+  : "/api";
 
 // Client Groups
 export interface ClientGroup {
@@ -13,18 +16,36 @@ export interface ClientGroup {
 const getAuthToken = (): Promise<string | null> => {
   return new Promise((resolve) => {
     const currentUser = userPool.getCurrentUser();
+    console.log("🔍 getAuthToken - currentUser:", !!currentUser);
     if (!currentUser) {
+      console.log("❌ getAuthToken - No current user");
       resolve(null);
       return;
     }
 
+    console.log(
+      "🔍 getAuthToken - Getting session for user:",
+      currentUser.getUsername()
+    );
     currentUser.getSession((err: any, session: any) => {
-      if (err || !session || !session.isValid()) {
+      console.log("🔍 getAuthToken - Session callback:", {
+        err: !!err,
+        session: !!session,
+        isValid: session?.isValid(),
+      });
+      if (err) {
+        console.log("❌ getAuthToken - Session error:", err);
+        resolve(null);
+        return;
+      }
+      if (!session || !session.isValid()) {
+        console.log("❌ getAuthToken - Invalid session");
         resolve(null);
         return;
       }
 
       const idToken = session.getIdToken().getJwtToken();
+      console.log("✅ getAuthToken - Got token, length:", idToken.length);
       resolve(idToken);
     });
   });
@@ -32,12 +53,15 @@ const getAuthToken = (): Promise<string | null> => {
 
 // Base API call function with auth
 const apiCall = async <T>(endpoint: string, data: any): Promise<T> => {
+  console.log("🚀 apiCall - Starting call to:", endpoint);
   const token = await getAuthToken();
 
   if (!token) {
+    console.log("❌ apiCall - No authentication token available");
     throw new Error("No authentication token available");
   }
 
+  console.log("📡 apiCall - Making request with token");
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     method: "POST",
     headers: {
@@ -47,12 +71,16 @@ const apiCall = async <T>(endpoint: string, data: any): Promise<T> => {
     body: JSON.stringify(data),
   });
 
+  console.log("📡 apiCall - Response status:", response.status);
   if (!response.ok) {
     const errorText = await response.text();
+    console.log("❌ apiCall - Error response:", errorText);
     throw new Error(`API call failed: ${response.status} ${errorText}`);
   }
 
-  return response.json();
+  const result = await response.json();
+  console.log("✅ apiCall - Success:", endpoint);
+  return result;
 };
 
 // Entity Types
@@ -85,7 +113,7 @@ export interface Entity {
 }
 
 export interface CreateEntityRequest {
-  user_id: string; // Required for data protection
+  user_id: number; // Required for data protection
   client_group_id: number; // Required for data protection
   name: string;
   entity_type_id: number;
@@ -94,7 +122,7 @@ export interface CreateEntityRequest {
 }
 
 export interface UpdateEntityRequest {
-  user_id: string; // Required for data protection
+  user_id: number; // Required for data protection
   entity_id?: number; // If passed, update existing entity; if not passed, create new entity
   client_group_id?: number; // Required for creating new entities
   name?: string;
@@ -104,7 +132,7 @@ export interface UpdateEntityRequest {
 }
 
 export interface QueryEntitiesRequest {
-  user_id: string; // Required for data protection
+  user_id: number; // Required for data protection
   entity_id?: number; // If passed, return only matching entity
   name?: string; // If ends with %, return all starting with string; else exact match
   entity_type_id?: number; // Filter by entity type
@@ -152,33 +180,32 @@ export const updateEntityType = async (
 
 // Users
 export interface User {
-  user_id: string;
+  user_id: number; // Auto-increment integer
+  sub: string; // Cognito user ID (required)
   email: string;
-  name: string;
   preferences?: any;
   primary_client_group_id?: number;
 }
 
 export interface CreateUserRequest {
-  user_id?: string;
+  sub: string; // Cognito user ID (required)
   email: string;
-  name: string;
   preferences?: any;
   primary_client_group_id?: number;
 }
 
 export interface UpdateUserRequest {
-  user_id: string;
+  user_id?: number; // Database user ID (for existing users)
+  sub?: string; // Cognito user ID (preferred lookup)
   email?: string;
-  name?: string;
   preferences?: any;
   primary_client_group_id?: number;
 }
 
 export interface QueryUsersRequest {
-  user_id?: string;
+  user_id?: number; // Database user ID
+  sub?: string; // Cognito user ID
   email?: string;
-  name?: string;
 }
 
 export type QueryUsersResponse = User[];
@@ -198,7 +225,7 @@ export interface UpdateClientGroupRequest {
 
 export interface QueryClientGroupsRequest {
   client_group_id?: number;
-  user_id?: string;
+  user_id?: number;
   group_name?: string;
 }
 
@@ -213,8 +240,8 @@ export const queryUsers = async (
 
 export const updateUser = async (
   data: UpdateUserRequest | CreateUserRequest
-): Promise<{ success: boolean; user_id: string }> => {
-  return apiCall<{ success: boolean; user_id: string }>("/update_user", data);
+): Promise<{ success: boolean; user_id: number }> => {
+  return apiCall<{ success: boolean; user_id: number }>("/update_user", data);
 };
 
 // Client Group API functions
@@ -235,27 +262,22 @@ export const updateClientGroup = async (
 
 // Invitation interfaces
 export interface Invitation {
-  invitation_id: string;
-  email: string;
-  name: string | null;
+  invitation_id: number;
   code: string;
   expires_at: string;
-  redeemed: boolean;
-  primary_client_group_id: number;
+  client_group_id: number;
 }
 
 export interface CreateInvitationRequest {
   action: "create";
-  email: string;
-  name?: string;
   expires_at: string;
-  primary_client_group_id: number;
+  client_group_id: number;
 }
 
 export interface GetInvitationRequest {
   action: "get";
-  email?: string;
-  primary_client_group_id?: number;
+  code?: string;
+  client_group_id?: number;
 }
 
 export interface RedeemInvitationRequest {
@@ -270,19 +292,17 @@ export type InvitationRequest =
 
 export type InvitationResponse =
   | Invitation[]
-  | { success: boolean; invitation_id: string; code: string }
+  | { success: boolean; invitation_id: number; code: string }
   | {
       success: boolean;
-      invitation_id: string;
-      email: string;
-      name: string;
-      primary_client_group_id: number;
+      invitation_id: number;
+      client_group_id: number;
     };
 
 // Client Group Membership interfaces
 export interface ModifyClientGroupMembershipRequest {
   client_group_id: number;
-  user_id: string;
+  user_id: number;
   add_or_remove: "add" | "remove";
 }
 
@@ -298,4 +318,72 @@ export const manageInvitation = async (
   data: InvitationRequest
 ): Promise<InvitationResponse> => {
   return apiCall<InvitationResponse>("/manage_invitation", data);
+};
+
+// Convenience function to update user's sub field after login
+export const updateUserSub = async (
+  sub: string,
+  email: string
+): Promise<{ success: boolean; user_id: number }> => {
+  return updateUser({
+    sub,
+    email,
+  });
+};
+
+// Utility function to parse and humanize API errors
+export const parseApiError = (error: Error): string => {
+  const message = error.message;
+  
+  // Handle API call errors with JSON responses
+  if (message.includes('API call failed:')) {
+    try {
+      // Extract JSON from error message like "API call failed: 500 {"error": "..."}"
+      const jsonMatch = message.match(/\{.*\}$/);
+      if (jsonMatch) {
+        const errorResponse = JSON.parse(jsonMatch[0]);
+        const errorText = errorResponse.error || errorResponse.message;
+        
+        // Handle specific database errors
+        if (typeof errorText === 'string') {
+          // Duplicate entry errors
+          if (errorText.includes('Duplicate entry') && errorText.includes('client_groups.name')) {
+            const nameMatch = errorText.match(/Duplicate entry '([^']+)'/);
+            const orgName = nameMatch ? nameMatch[1] : 'that name';
+            return `That organization name "${orgName}" is already in use. Please try a different name.`;
+          }
+          
+          // Other duplicate entry errors
+          if (errorText.includes('Duplicate entry')) {
+            return 'This record already exists. Please check your input and try again.';
+          }
+          
+          // Foreign key constraint errors
+          if (errorText.includes('foreign key constraint')) {
+            return 'Unable to complete this action due to related data constraints.';
+          }
+          
+          // Connection errors
+          if (errorText.includes('connection') || errorText.includes('timeout')) {
+            return 'Connection error. Please check your internet connection and try again.';
+          }
+          
+          // Access denied errors
+          if (errorText.includes('Access denied') || errorText.includes('permission')) {
+            return 'You do not have permission to perform this action.';
+          }
+        }
+      }
+    } catch (parseError) {
+      // If we can't parse the JSON, fall back to basic cleanup
+    }
+  }
+  
+  // Generic cleanup for other errors
+  if (message.includes('API call failed:')) {
+    return 'An error occurred while processing your request. Please try again.';
+  }
+  
+  // Return the original message if no specific handling applies
+  return message;
 };

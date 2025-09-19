@@ -7,7 +7,6 @@ import {
   TextField,
   Button,
   Box,
-  Typography,
   CircularProgress,
   IconButton,
   InputAdornment,
@@ -19,9 +18,16 @@ import ConfirmationDialog from "./ConfirmationDialog";
 interface SignupDialogProps {
   open: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
+  onSwitchToLogin?: () => void;
 }
 
-const SignupDialog: React.FC<SignupDialogProps> = ({ open, onClose }) => {
+const SignupDialog: React.FC<SignupDialogProps> = ({
+  open,
+  onClose,
+  onSuccess,
+  onSwitchToLogin,
+}) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -73,6 +79,7 @@ const SignupDialog: React.FC<SignupDialogProps> = ({ open, onClose }) => {
     setSignupEmail("");
     setSignupPassword("");
     onClose(); // Close the main signup dialog too
+    onSuccess?.(); // Call success callback after confirmation dialog closes
   };
 
   const isFormValid =
@@ -148,6 +155,19 @@ const SignupDialog: React.FC<SignupDialogProps> = ({ open, onClose }) => {
                 ),
               }}
             />
+            {onSwitchToLogin && (
+              <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
+                <Button
+                  variant="text"
+                  size="small"
+                  onClick={onSwitchToLogin}
+                  disabled={loading}
+                  sx={{ textTransform: "none" }}
+                >
+                  Already have an account? Login
+                </Button>
+              </Box>
+            )}
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3, pt: 1 }}>

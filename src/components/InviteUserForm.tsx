@@ -32,7 +32,6 @@ interface InviteUserFormProps {
 interface FormData {
   clientGroupId: number | "";
   email: string;
-  name: string;
   expiresAt: Date | null;
 }
 
@@ -50,7 +49,6 @@ export const InviteUserForm: React.FC<InviteUserFormProps> = ({
   const [formData, setFormData] = useState<FormData>({
     clientGroupId: "",
     email: "",
-    name: "",
     expiresAt: null,
   });
 
@@ -59,21 +57,71 @@ export const InviteUserForm: React.FC<InviteUserFormProps> = ({
   );
   const [invitationCode, setInvitationCode] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   // Fetch current user data to get primary client group
   const { data: currentUser } = useQuery({
     queryKey: ["user", userId],
-    queryFn: () => apiService.queryUsers({ user_id: userId! }),
+    queryFn: () => apiService.queryUsers({ sub: userId! }),
     enabled: !!userId,
     select: (data) => data[0], // Assuming queryUsers returns an array
   });
 
-  // Fetch client groups for the dropdown
-  const { data: clientGroups = [] } = useQuery<ClientGroup[]>({
-    queryKey: ["clientGroups"],
-    queryFn: () => apiService.queryClientGroups({}),
-    enabled: open,
+  // Fetch client groups for the dropdown (only groups the user is a member of)
+  const { data: membershipGroups = [], error: clientGroupsError } = useQuery<
+    ClientGroup[]
+  >({
+    queryKey: ["clientGroups", currentUser?.user_id],
+    queryFn: async () => {
+      console.log(
+        "🔍 InviteUserForm - Fetching client groups for user_id:",
+        currentUser?.user_id
+      );
+      const result = await apiService.queryClientGroups({
+        user_id: currentUser!.user_id,
+      });
+      console.log("🔍 InviteUserForm - Client groups result:", result);
+      return result;
+    },
+    enabled: open && !!currentUser?.user_id,
   });
+
+  // Fallback: if no membership groups found, at least include user's primary group
+  const { data: primaryGroup } = useQuery<ClientGroup[]>({
+    queryKey: ["primaryClientGroup", currentUser?.primary_client_group_id],
+    queryFn: () =>
+      apiService.queryClientGroups({
+        client_group_id: currentUser!.primary_client_group_id!,
+      }),
+    enabled:
+      open &&
+      !!currentUser?.primary_client_group_id &&
+      membershipGroups.length === 0,
+  });
+
+  // Combine membership groups with primary group (avoid duplicates)
+  const clientGroups = React.useMemo(() => {
+    const groups = [...membershipGroups];
+    if (primaryGroup && primaryGroup.length > 0) {
+      const primaryGroupItem = primaryGroup[0];
+      if (
+        !groups.find(
+          (g) => g.client_group_id === primaryGroupItem.client_group_id
+        )
+      ) {
+        groups.push(primaryGroupItem);
+      }
+    }
+    return groups;
+  }, [membershipGroups, primaryGroup]);
+
+  // Log client groups data for debugging
+  console.log(
+    "🔍 InviteUserForm - Final client groups:",
+    clientGroups,
+    "Error:",
+    clientGroupsError
+  );
 
   // Check if email is already a member of selected client group
   const { refetch: checkExistingUser } = useQuery({
@@ -91,6 +139,7 @@ export const InviteUserForm: React.FC<InviteUserFormProps> = ({
       if (typeof response === "object" && "code" in response) {
         setInvitationCode(response.code);
         setIsGenerating(false);
+        setCopySuccess(false); // Reset copy state for new invitation
       }
     },
     onError: (error) => {
@@ -105,7 +154,6 @@ export const InviteUserForm: React.FC<InviteUserFormProps> = ({
       setFormData({
         clientGroupId: currentUser.primary_client_group_id || "",
         email: "",
-        name: "",
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
       });
       setValidationErrors([]);
@@ -169,10 +217,6 @@ export const InviteUserForm: React.FC<InviteUserFormProps> = ({
       });
     }
 
-    if (!formData.name.trim()) {
-      errors.push({ field: "name", message: "Name is required" });
-    }
-
     if (!formData.expiresAt) {
       errors.push({
         field: "expiresAt",
@@ -205,10 +249,8 @@ export const InviteUserForm: React.FC<InviteUserFormProps> = ({
 
     createInvitationMutation.mutate({
       action: "create",
-      email: formData.email,
-      name: formData.name,
       expires_at: formData.expiresAt!.toISOString(),
-      primary_client_group_id: formData.clientGroupId as number,
+      client_group_id: formData.clientGroupId as number,
     });
   };
 
@@ -219,16 +261,17 @@ export const InviteUserForm: React.FC<InviteUserFormProps> = ({
     );
     const expiresAtFormatted = formData.expiresAt!.toLocaleString();
 
-    const subject = `Welcome to ${selectedClientGroup?.name}`;
-    const body = `Welcome to ${selectedClientGroup?.name}
+    const subject = `Invitation to join ${selectedClientGroup?.name} on OneBor`;
+    const body = `You have been invited to join "${selectedClientGroup?.name}" on OneBor.
 
-You have been granted an invitation to join a OneBor client group by one of your administrators. This invitation will expire at ${expiresAtFormatted}. Please click on the link below or copy the code in this email to accept the invitation.
+This invitation will expire at ${expiresAtFormatted}.
 
-Link to accept: <a href="onebor.com/accept_invitation/${invitationCode} />
+To accept your invitation, please click the link below:
+https://onebor.com/accept_invitation/${invitationCode}
 
-Invitation code: ${invitationCode}
+Alternatively, you can manually enter this invitation code: ${invitationCode}
 
-If you have any questions please contact the person at your firm who administers OneBor.`;
+If you have any questions, please contact the person at your firm who administers OneBor.`;
 
     const mailtoUrl = `mailto:${formData.email}?subject=${encodeURIComponent(
       subject
@@ -241,12 +284,12 @@ If you have any questions please contact the person at your firm who administers
     setFormData({
       clientGroupId: "",
       email: "",
-      name: "",
       expiresAt: null,
     });
     setValidationErrors([]);
     setInvitationCode("");
     setIsGenerating(false);
+    setCopySuccess(false);
     onClose();
   };
 
@@ -259,24 +302,12 @@ If you have any questions please contact the person at your firm who administers
   const canGenerateInvitation =
     !!formData.clientGroupId &&
     !!formData.email &&
-    !!formData.name.trim() &&
     !!formData.expiresAt &&
     validationErrors.length === 0;
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        <Box display="flex" alignItems="center" gap={1}>
-          <Typography variant="h6">Invite User</Typography>
-          {invitationCode && (
-            <Chip
-              label={`Code: ${invitationCode}`}
-              color="primary"
-              size="small"
-            />
-          )}
-        </Box>
-      </DialogTitle>
+      <DialogTitle>Invite User</DialogTitle>
 
       <DialogContent>
         <Box display="flex" flexDirection="column" gap={2} sx={{ mt: 1 }}>
@@ -324,16 +355,6 @@ If you have any questions please contact the person at your firm who administers
             type="email"
           />
 
-          {/* Name Field */}
-          <TextField
-            fullWidth
-            label="Invitee Name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            error={!!getFieldError("name")}
-            helperText={getFieldError("name")}
-          />
-
           {/* Expiration Date */}
           <LocalizationProvider dateAdapter={AdapterDateFns}>
             <DateTimePicker
@@ -354,12 +375,41 @@ If you have any questions please contact the person at your firm who administers
 
           {/* Invitation Code Display */}
           {invitationCode && (
-            <Alert severity="success">
-              <Typography variant="body2">
-                Invitation generated successfully! Use the "Send Invitation"
-                button to email the invitation.
-              </Typography>
-            </Alert>
+            <>
+              <Alert severity="success">
+                <Typography variant="body2">
+                  Invitation generated successfully! Use the "Send Invitation"
+                  button to email the invitation.
+                </Typography>
+              </Alert>
+
+              {/* Code with Copy Button */}
+              <Box display="flex" alignItems="center" gap={1} sx={{ mt: 1 }}>
+                <Chip
+                  label={`Code: ${invitationCode}`}
+                  color="primary"
+                  size="medium"
+                />
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(invitationCode);
+                      setCopySuccess(true);
+                      setTimeout(() => setCopySuccess(false), 2000);
+                    } catch (err) {
+                      console.error("Failed to copy code:", err);
+                    }
+                  }}
+                  title="Copy code to clipboard"
+                  sx={{ minWidth: "auto", px: 1 }}
+                  color={copySuccess ? "success" : "primary"}
+                >
+                  {copySuccess ? "Copied!" : "Copy"}
+                </Button>
+              </Box>
+            </>
           )}
         </Box>
       </DialogContent>

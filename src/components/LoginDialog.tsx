@@ -7,7 +7,6 @@ import {
   TextField,
   Button,
   Box,
-  Typography,
   CircularProgress,
   IconButton,
   InputAdornment,
@@ -19,9 +18,16 @@ import ForgotPasswordDialog from "./ForgotPasswordDialog";
 interface LoginDialogProps {
   open: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
+  onSwitchToSignup?: () => void;
 }
 
-const LoginDialog: React.FC<LoginDialogProps> = ({ open, onClose }) => {
+const LoginDialog: React.FC<LoginDialogProps> = ({
+  open,
+  onClose,
+  onSuccess,
+  onSwitchToSignup,
+}) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -36,9 +42,10 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ open, onClose }) => {
     setLoading(true);
     try {
       await login(email, password);
-      onClose();
       setEmail("");
       setPassword("");
+      onClose();
+      onSuccess?.();
     } catch (error: any) {
       // Error handling will be done in the parent component via context
       console.error("Login error:", error);
@@ -98,7 +105,9 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ open, onClose }) => {
                 ),
               }}
             />
-            <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
+            <Box
+              sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}
+            >
               <Button
                 variant="text"
                 size="small"
@@ -108,6 +117,17 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ open, onClose }) => {
               >
                 Forgot Password?
               </Button>
+              {onSwitchToSignup && (
+                <Button
+                  variant="text"
+                  size="small"
+                  onClick={onSwitchToSignup}
+                  disabled={loading}
+                  sx={{ textTransform: "none" }}
+                >
+                  Need an account? Sign up
+                </Button>
+              )}
             </Box>
           </Box>
         </DialogContent>

@@ -1,9 +1,11 @@
 import React, { useState } from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import LandingPage from "./components/LandingPage";
 import SuccessPage from "./components/SuccessPage";
+import AcceptInvitation from "./components/AcceptInvitation";
 import ErrorSnackbar from "./components/ErrorSnackbar";
 
 const theme = createTheme({
@@ -39,14 +41,27 @@ function AppContent() {
   }
 
   return (
-    <>
-      {isAuthenticated ? <SuccessPage /> : <LandingPage />}
-      <ErrorSnackbar
-        open={!!error}
-        message={error || ""}
-        onClose={() => setError(null)}
-      />
-    </>
+    <Router>
+      <Routes>
+        <Route
+          path="/accept_invitation/:invitationCode"
+          element={<AcceptInvitation />}
+        />
+        <Route
+          path="/"
+          element={
+            <>
+              {isAuthenticated ? <SuccessPage /> : <LandingPage />}
+              <ErrorSnackbar
+                open={!!error}
+                message={error || ""}
+                onClose={() => setError(null)}
+              />
+            </>
+          }
+        />
+      </Routes>
+    </Router>
   );
 }
 

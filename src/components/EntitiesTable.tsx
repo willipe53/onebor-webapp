@@ -23,9 +23,18 @@ import EntityForm from "./EntityForm";
 
 const EntitiesTable: React.FC = () => {
   const { userId } = useAuth();
+
+  // Get current user's database ID
+  const { data: currentUser } = useQuery({
+    queryKey: ["user", userId],
+    queryFn: () => apiService.queryUsers({ sub: userId! }),
+    enabled: !!userId,
+    select: (data) => data[0], // Get first user from array
+  });
+
   const [filters, setFilters] = useState<
     Partial<apiService.QueryEntitiesRequest>
-  >({ user_id: userId! });
+  >({});
   const [nameFilter, setNameFilter] = useState("");
   const [entityIdFilter, setEntityIdFilter] = useState("");
   const [entityTypeFilter, setEntityTypeFilter] = useState("");
@@ -40,9 +49,10 @@ const EntitiesTable: React.FC = () => {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["entities", filters, userId],
-    queryFn: () => apiService.queryEntities({ ...filters, user_id: userId! }),
-    enabled: !!userId, // Only run query when user is authenticated
+    queryKey: ["entities", filters, currentUser?.user_id],
+    queryFn: () =>
+      apiService.queryEntities({ ...filters, user_id: currentUser!.user_id }),
+    enabled: !!currentUser?.user_id, // Only run query when user data is loaded
   });
 
   // Transform array data to objects if needed
@@ -143,7 +153,7 @@ const EntitiesTable: React.FC = () => {
       return entries
         .map(([key, value]) => {
           // Determine the type of the value for better formatting
-          let valueType = typeof value;
+          let valueType: string = typeof value;
           let displayValue = String(value);
 
           // Handle special cases
@@ -330,18 +340,18 @@ const EntitiesTable: React.FC = () => {
   }
 
   const handleFilter = () => {
-    const newFilters: apiService.QueryEntitiesRequest = {};
+    const newFilters: Partial<apiService.QueryEntitiesRequest> = {};
     if (entityIdFilter) newFilters.entity_id = parseInt(entityIdFilter);
     if (nameFilter) newFilters.name = nameFilter;
     if (entityTypeFilter)
       newFilters.entity_type_id = parseInt(entityTypeFilter);
     if (parentEntityFilter)
       newFilters.parent_entity_id = parseInt(parentEntityFilter);
-    setFilters({ ...newFilters, user_id: userId! });
+    setFilters({ ...newFilters, user_id: currentUser!.user_id });
   };
 
   const clearFilters = () => {
-    setFilters({ user_id: userId! });
+    setFilters({ user_id: currentUser!.user_id });
     setNameFilter("");
     setEntityIdFilter("");
     setEntityTypeFilter("");

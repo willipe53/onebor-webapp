@@ -58,7 +58,7 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
   // Fetch user data to get primary client group
   const { data: users } = useQuery({
     queryKey: ["users", userId],
-    queryFn: () => apiService.queryUsers({ user_id: userId! }),
+    queryFn: () => apiService.queryUsers({ sub: userId! }),
     enabled: !!userId,
   });
 
@@ -72,9 +72,9 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
 
   // Fetch entities for parent dropdown
   const { data: rawEntitiesData, isLoading: entitiesLoading } = useQuery({
-    queryKey: ["entities", userId],
-    queryFn: () => apiService.queryEntities({ user_id: userId! }),
-    enabled: !!userId,
+    queryKey: ["entities", currentUser?.user_id],
+    queryFn: () => apiService.queryEntities({ user_id: currentUser!.user_id }),
+    enabled: !!currentUser?.user_id,
   });
 
   // Transform array data to objects if needed
@@ -408,7 +408,7 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
 
     // Prepare request data
     const requestData: apiService.UpdateEntityRequest = {
-      user_id: userId!,
+      user_id: currentUser!.user_id,
       name,
       entity_type_id: selectedEntityType?.entity_type_id,
       parent_entity_id: selectedParentEntity?.entity_id || null,
@@ -455,38 +455,6 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
         return newErrors;
       });
     }
-  };
-
-  const validateFields = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    // Validate name
-    if (!name.trim()) {
-      newErrors.name = "Entity name is required";
-    }
-
-    // Validate entity type
-    if (!selectedEntityType) {
-      newErrors.entityType = "Entity type is required";
-    }
-
-    // Validate schema fields
-    schemaFields.forEach((field) => {
-      const value = dynamicFields[field.key];
-
-      if (field.required && (!value || value === "")) {
-        newErrors[field.key] = `${prettyPrint(field.key)} is required`;
-      }
-
-      if (value && field.format === "email" && !isValidEmail(value)) {
-        newErrors[field.key] = `${prettyPrint(
-          field.key
-        )} must be a valid email address`;
-      }
-    });
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
   const renderSchemaField = (field: FormField) => {

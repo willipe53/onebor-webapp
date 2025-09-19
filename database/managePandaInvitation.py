@@ -35,11 +35,9 @@ def lambda_handler(event, context):
             body = event
 
         action = body.get("action")
-        email = body.get("email")
-        name = body.get("name")
         expires_at = body.get("expires_at")
-        primary_client_group_id = body.get("primary_client_group_id")
-        code = body.get("code")  # For redeem action
+        client_group_id = body.get("client_group_id")
+        code = body.get("code")  # For get and redeem actions
 
         if not action:
             return {
@@ -53,24 +51,24 @@ def lambda_handler(event, context):
 
         with conn.cursor() as cursor:
             if action == "get":
-                # Get invitations by email or primary_client_group_id
-                if not email and not primary_client_group_id:
+                # Get invitations by client_group_id or code
+                if not client_group_id and not code:
                     return {
                         "statusCode": 400,
                         "headers": {"Content-Type": "application/json"},
-                        "body": json.dumps({"error": "email or primary_client_group_id is required for get action"})
+                        "body": json.dumps({"error": "client_group_id or code is required for get action"})
                     }
 
                 query = "SELECT * FROM invitations WHERE 1=1"
                 params = []
 
-                if email:
-                    query += " AND email = %s"
-                    params.append(email)
+                if client_group_id:
+                    query += " AND client_group_id = %s"
+                    params.append(client_group_id)
 
-                if primary_client_group_id:
-                    query += " AND primary_client_group_id = %s"
-                    params.append(primary_client_group_id)
+                if code:
+                    query += " AND code = %s"
+                    params.append(code)
 
                 cursor.execute(query, params)
                 rows = cursor.fetchall()
@@ -83,15 +81,12 @@ def lambda_handler(event, context):
 
             elif action == "create":
                 # Create new invitation
-                if not email or not expires_at or not primary_client_group_id:
+                if not expires_at or not client_group_id:
                     return {
                         "statusCode": 400,
                         "headers": {"Content-Type": "application/json"},
-                        "body": json.dumps({"error": "email, expires_at, and primary_client_group_id are required for create action"})
+                        "body": json.dumps({"error": "expires_at and client_group_id are required for create action"})
                     }
-
-                # Generate invitation_id and let database generate code
-                invitation_id = str(uuid.uuid4())
 
                 # Parse expires_at to ensure it's in correct format
                 try:
@@ -106,14 +101,15 @@ def lambda_handler(event, context):
                         "body": json.dumps({"error": "expires_at must be a valid ISO datetime string"})
                     }
 
+                # Let database auto-generate invitation_id and code
                 query = """
-                    INSERT INTO invitations (invitation_id, email, name, expires_at, primary_client_group_id)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO invitations (expires_at, client_group_id)
+                    VALUES (%s, %s)
                 """
-                params = [invitation_id, email, name,
-                          expires_at, primary_client_group_id]
+                params = [expires_at, client_group_id]
 
                 cursor.execute(query, params)
+                invitation_id = cursor.lastrowid
                 conn.commit()
 
                 # Get the generated code
@@ -133,7 +129,7 @@ def lambda_handler(event, context):
                 }
 
             elif action == "redeem":
-                # Redeem invitation by code
+                # Redeem invitation by code (set expires_at to now)
                 if not code:
                     return {
                         "statusCode": 400,
@@ -141,10 +137,10 @@ def lambda_handler(event, context):
                         "body": json.dumps({"error": "code is required for redeem action"})
                     }
 
-                # Check if invitation exists and is not already redeemed
+                # Check if invitation exists and is not already expired
                 cursor.execute("""
                     SELECT * FROM invitations 
-                    WHERE code = %s AND redeemed = FALSE AND expires_at > NOW()
+                    WHERE code = %s AND expires_at > NOW()
                 """, (code,))
                 invitation = cursor.fetchone()
 
@@ -155,10 +151,10 @@ def lambda_handler(event, context):
                         "body": json.dumps({"error": "Invalid or expired invitation code"})
                     }
 
-                # Mark as redeemed
+                # Mark as redeemed by setting expires_at to now
                 cursor.execute("""
                     UPDATE invitations 
-                    SET redeemed = TRUE 
+                    SET expires_at = NOW() 
                     WHERE code = %s
                 """, (code,))
                 conn.commit()
@@ -169,9 +165,7 @@ def lambda_handler(event, context):
                     "body": json.dumps({
                         "success": True,
                         "invitation_id": invitation['invitation_id'],
-                        "email": invitation['email'],
-                        "name": invitation['name'],
-                        "primary_client_group_id": invitation['primary_client_group_id']
+                        "client_group_id": invitation['client_group_id']
                     })
                 }
 
