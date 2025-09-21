@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Comprehensive tests for Client Group Membership modification APIs.
 Tests follow the pattern: modify -> validate -> revert -> validate -> cleanup
@@ -14,14 +15,12 @@ class TestClientGroupMembership(BaseAPITest):
         """Test adding a user to a client group and then removing them."""
         # Create test client group
         test_group_name = self.generate_test_name("MEMBERSHIP_GROUP")
+        test_group_name = self.generate_test_name("TEST_GROUP")
         group_result = self.create_client_group(test_group_name)
         group_id = group_result['id']
 
-        # Create test user
-        test_user_id = f"membership_user_{self.get_test_timestamp()}"
-        test_email = f"membership_{self.get_test_timestamp()}@example.com"
-        test_name = self.generate_test_name("MEMBERSHIP_USER")
-        self.create_user(test_user_id, test_email, test_name)
+        # Use existing authenticated test user
+        test_user_id = self.test_user_id
 
         # Step 1: Add user to client group
         add_result = self.modify_client_group_membership(
@@ -51,14 +50,11 @@ class TestClientGroupMembership(BaseAPITest):
     def test_add_user_already_in_group(self):
         """Test adding a user who is already in the group (should handle gracefully)."""
         # Create test client group and user
-        test_group_name = self.generate_test_name("DUPLICATE_GROUP")
+        test_group_name = self.generate_test_name("TEST_GROUP")
         group_result = self.create_client_group(test_group_name)
         group_id = group_result['id']
 
-        test_user_id = f"duplicate_user_{self.get_test_timestamp()}"
-        test_email = f"duplicate_{self.get_test_timestamp()}@example.com"
-        test_name = self.generate_test_name("DUPLICATE_USER")
-        self.create_user(test_user_id, test_email, test_name)
+        test_user_id = self.test_user_id
 
         # Add user to group first time
         first_add = self.modify_client_group_membership(
@@ -90,14 +86,11 @@ class TestClientGroupMembership(BaseAPITest):
     def test_remove_user_not_in_group(self):
         """Test removing a user who is not in the group (should handle gracefully)."""
         # Create test client group and user
-        test_group_name = self.generate_test_name("REMOVE_GROUP")
+        test_group_name = self.generate_test_name("TEST_GROUP")
         group_result = self.create_client_group(test_group_name)
         group_id = group_result['id']
 
-        test_user_id = f"remove_user_{self.get_test_timestamp()}"
-        test_email = f"remove_{self.get_test_timestamp()}@example.com"
-        test_name = self.generate_test_name("REMOVE_USER")
-        self.create_user(test_user_id, test_email, test_name)
+        test_user_id = self.test_user_id
 
         # Verify user is not in group initially
         user_groups = self.get_client_groups({'user_id': test_user_id})
@@ -120,14 +113,11 @@ class TestClientGroupMembership(BaseAPITest):
     def test_membership_action_variations(self):
         """Test different action variations (add, insert, del, delete, remove)."""
         # Create test client group and user
-        test_group_name = self.generate_test_name("VARIATION_GROUP")
+        test_group_name = self.generate_test_name("TEST_GROUP")
         group_result = self.create_client_group(test_group_name)
         group_id = group_result['id']
 
-        test_user_id = f"variation_user_{self.get_test_timestamp()}"
-        test_email = f"variation_{self.get_test_timestamp()}@example.com"
-        test_name = self.generate_test_name("VARIATION_USER")
-        self.create_user(test_user_id, test_email, test_name)
+        test_user_id = self.test_user_id
 
         # Test 1: "insert" action (should work like "add")
         insert_result = self.modify_client_group_membership(
@@ -171,14 +161,11 @@ class TestClientGroupMembership(BaseAPITest):
     def test_invalid_membership_actions(self):
         """Test invalid action values."""
         # Create test client group and user
-        test_group_name = self.generate_test_name("INVALID_GROUP")
+        test_group_name = self.generate_test_name("TEST_GROUP")
         group_result = self.create_client_group(test_group_name)
         group_id = group_result['id']
 
-        test_user_id = f"invalid_user_{self.get_test_timestamp()}"
-        test_email = f"invalid_{self.get_test_timestamp()}@example.com"
-        test_name = self.generate_test_name("INVALID_USER")
-        self.create_user(test_user_id, test_email, test_name)
+        test_user_id = self.test_user_id
 
         # Test invalid action values
         invalid_actions = ["invalid", "create", "update", "", None, 123]
@@ -206,13 +193,10 @@ class TestClientGroupMembership(BaseAPITest):
     def test_membership_with_nonexistent_resources(self):
         """Test membership operations with non-existent client groups or users."""
         # Create real user for testing with fake group
-        test_user_id = f"real_user_{self.get_test_timestamp()}"
-        test_email = f"real_{self.get_test_timestamp()}@example.com"
-        test_name = self.generate_test_name("REAL_USER")
-        self.create_user(test_user_id, test_email, test_name)
+        test_user_id = self.test_user_id
 
         # Create real group for testing with fake user
-        test_group_name = self.generate_test_name("REAL_GROUP")
+        test_group_name = self.generate_test_name("TEST_GROUP")
         group_result = self.create_client_group(test_group_name)
         real_group_id = group_result['id']
 
@@ -269,17 +253,14 @@ class TestClientGroupMembership(BaseAPITest):
     def test_multiple_users_single_group(self):
         """Test adding multiple users to a single group."""
         # Create test client group
-        test_group_name = self.generate_test_name("MULTI_USER_GROUP")
+        test_group_name = self.generate_test_name("TEST_GROUP")
         group_result = self.create_client_group(test_group_name)
         group_id = group_result['id']
 
         # Create multiple test users
         test_users = []
         for i in range(3):
-            user_id = f"multi_user_{i}_{self.get_test_timestamp()}"
-            email = f"multi_{i}_{self.get_test_timestamp()}@example.com"
-            name = self.generate_test_name(f"MULTI_USER_{i}")
-            self.create_user(user_id, email, name)
+            user_id = self.test_user_id
             test_users.append(user_id)
 
         # Add all users to the group
@@ -312,15 +293,12 @@ class TestClientGroupMembership(BaseAPITest):
     def test_single_user_multiple_groups(self):
         """Test adding a single user to multiple groups."""
         # Create test user
-        test_user_id = f"single_user_{self.get_test_timestamp()}"
-        test_email = f"single_{self.get_test_timestamp()}@example.com"
-        test_name = self.generate_test_name("SINGLE_USER")
-        self.create_user(test_user_id, test_email, test_name)
+        test_user_id = self.test_user_id
 
         # Create multiple test groups
         test_groups = []
         for i in range(3):
-            group_name = self.generate_test_name(f"MULTI_GROUP_{i}")
+            group_name = self.generate_test_name("TEST_GROUP")
             group_result = self.create_client_group(group_name)
             test_groups.append(group_result['id'])
 

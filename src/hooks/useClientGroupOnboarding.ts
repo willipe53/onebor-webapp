@@ -67,10 +67,10 @@ export const useClientGroupOnboarding = (
   });
 
   useEffect(() => {
-    console.log("🔍 useClientGroupOnboarding - Parameters:", {
-      cognitoUserId,
-      userEmail,
-    });
+    // console.log("🔍 useClientGroupOnboarding - Parameters:", {
+    //   cognitoUserId,
+    //   userEmail,
+    // });
     if (!cognitoUserId || !userEmail) {
       console.log("❌ useClientGroupOnboarding - Missing required parameters");
       setState({

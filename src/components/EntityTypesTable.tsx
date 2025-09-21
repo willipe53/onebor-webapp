@@ -5,7 +5,10 @@ import {
   CircularProgress,
   Button,
   Modal,
+  Tooltip,
+  IconButton,
 } from "@mui/material";
+import { Add, InfoOutlined } from "@mui/icons-material";
 import { DataGrid } from "@mui/x-data-grid";
 import type {
   GridColDef,
@@ -14,10 +17,22 @@ import type {
 } from "@mui/x-data-grid";
 import { useQuery } from "@tanstack/react-query";
 import * as apiService from "../services/api";
+import type { QueryEntityTypesResponse } from "../services/api";
 import EntityTypeForm from "./EntityTypeForm";
 
+// Temporary local interface definition to bypass import issue
+interface EntityType {
+  entity_type_id: number;
+  name: string;
+  short_label?: string;
+  label_color?: string;
+  attributes_schema: any;
+}
+
 const EntityTypesTable: React.FC = () => {
-  const [editingEntityType, setEditingEntityType] = useState<any>(null);
+  const [editingEntityType, setEditingEntityType] = useState<EntityType | null>(
+    null
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Fetch entity types
@@ -26,44 +41,46 @@ const EntityTypesTable: React.FC = () => {
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useQuery<QueryEntityTypesResponse>({
     queryKey: ["entity-types"],
-    queryFn: () => apiService.queryEntityTypes({}),
+    queryFn: async () => {
+      // console.log(
+      //   "🔍 EntityTypesTable - Starting API call to queryEntityTypes"
+      // );
+      try {
+        const result = await apiService.queryEntityTypes({});
+        // console.log(
+        //   "✅ EntityTypesTable - API call successful, result:",
+        //   result
+        // );
+        return result;
+      } catch (err) {
+        console.error("❌ EntityTypesTable - API call failed:", err);
+        throw err;
+      }
+    },
   });
 
-  // Transform array data to objects if needed
-  const data = React.useMemo(() => {
-    if (!rawData) return [];
+  // Use the data directly since it's already an array of EntityType
+  const data = rawData || [];
 
-    // Check if data is already in object format
-    if (
-      Array.isArray(rawData) &&
-      rawData.length > 0 &&
-      typeof rawData[0] === "object" &&
-      "entity_type_id" in rawData[0]
-    ) {
-      return rawData;
-    }
+  // Get current user for primary client group (simplified approach)
+  const { data: currentUser } = useQuery({
+    queryKey: ["current-user"],
+    queryFn: () => apiService.queryUsers({ sub: "current" }),
+    select: (data) => data[0],
+  });
 
-    // Transform array format [id, name, schema, short_label, label_color] to object format
-    if (Array.isArray(rawData)) {
-      return rawData.map((row: any) => {
-        if (Array.isArray(row) && row.length >= 3) {
-          return {
-            entity_type_id: row[0],
-            name: row[1],
-            attributes_schema:
-              typeof row[2] === "string" ? JSON.parse(row[2]) : row[2],
-            short_label: row[3] || null,
-            label_color: row[4] || null,
-          };
-        }
-        return row;
-      });
-    }
-
-    return rawData;
-  }, [rawData]);
+  // Get primary client group details
+  const { data: primaryClientGroup } = useQuery({
+    queryKey: ["primary-client-group", currentUser?.primary_client_group_id],
+    queryFn: () =>
+      apiService.queryClientGroups({
+        client_group_id: currentUser!.primary_client_group_id!,
+      }),
+    enabled: !!currentUser?.primary_client_group_id,
+    select: (data) => data[0],
+  });
 
   const formatSchema = (schema: any) => {
     if (!schema || typeof schema !== "object") return "None";
@@ -189,8 +206,25 @@ const EntityTypesTable: React.FC = () => {
         <Typography color="error" sx={{ mb: 2 }}>
           {error instanceof Error ? error.message : "Unknown error"}
         </Typography>
-        <Button variant="contained" onClick={() => refetch()}>
+        <Typography variant="body2" sx={{ mb: 2, color: "text.secondary" }}>
+          This is likely a backend API issue. The /get_entity_types endpoint is
+          returning a 502 error.
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 3, color: "text.secondary" }}>
+          💡 <strong>Possible causes:</strong> Database constraint violations
+          from test data, Lambda function errors, or API gateway timeouts.
+        </Typography>
+        <Button variant="contained" onClick={() => refetch()} sx={{ mr: 2 }}>
           Retry
+        </Button>
+        <Button
+          variant="outlined"
+          onClick={() => {
+            console.log("EntityTypesTable error details:", error);
+            alert("Check browser console for detailed error information");
+          }}
+        >
+          Show Debug Info
         </Button>
       </Box>
     );
@@ -198,53 +232,92 @@ const EntityTypesTable: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      {/* Updated header styling - force refresh */}
-      <Typography variant="h5" gutterBottom>
-        Entity Types
-      </Typography>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+        <Typography variant="h5">Entity Types</Typography>
+        <Tooltip
+          title="Entity Types define required and optional attributes of Entities. Making changes here will affect the fields that are visible by default for all Entities in your organization."
+          placement="right"
+          arrow
+        >
+          <IconButton size="small" sx={{ color: "text.secondary" }}>
+            <InfoOutlined fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Button
+          variant="contained"
+          color="success"
+          size="small"
+          startIcon={<Add />}
+          onClick={() => {
+            setEditingEntityType(null); // Set null for new entity type
+            setIsModalOpen(true);
+          }}
+          sx={{
+            borderRadius: "20px",
+            textTransform: "none",
+            fontWeight: 600,
+          }}
+        >
+          New
+        </Button>
+      </Box>
 
       {/* Data Grid */}
       <Box sx={{ height: 600, width: "100%" }}>
-        <DataGrid
-          rows={data || []}
-          columns={columns}
-          getRowId={(row) => row.entity_type_id}
-          pagination
-          pageSizeOptions={[25, 50, 100]}
-          initialState={{
-            pagination: {
-              paginationModel: { pageSize: 25 },
-            },
-          }}
-          disableRowSelectionOnClick
-          onRowClick={handleRowClick}
-          getRowHeight={() => "auto"}
-          sx={{
-            "& .MuiDataGrid-cell": {
-              fontSize: "0.875rem",
-              display: "flex",
-              alignItems: "center",
-              lineHeight: "unset !important",
-              maxHeight: "none !important",
-              whiteSpace: "unset",
-            },
-            "& .MuiDataGrid-row": {
-              maxHeight: "none !important",
-            },
-            "& .MuiDataGrid-renderingZone": {
-              maxHeight: "none !important",
-            },
-            "& .MuiDataGrid-columnHeaders": {
-              backgroundColor: "rgba(25, 118, 210, 0.15) !important", // Slightly more visible blue
-              borderBottom: "1px solid rgba(25, 118, 210, 0.2) !important",
-            },
-            "& .MuiDataGrid-columnHeader": {
-              backgroundColor: "rgba(25, 118, 210, 0.15) !important",
-              display: "flex",
-              alignItems: "center",
-            },
-          }}
-        />
+        {data.length === 0 && !isLoading ? (
+          <Box sx={{ p: 4, textAlign: "center" }}>
+            <Typography variant="body2" color="text.secondary">
+              No entity types found
+              <br />
+              No entity types exist for{" "}
+              {primaryClientGroup?.name || "this client group"}
+              <br />
+              Click "New" to create one for{" "}
+              {primaryClientGroup?.name || "this client group"}.
+            </Typography>
+          </Box>
+        ) : (
+          <DataGrid
+            rows={data || []}
+            columns={columns}
+            getRowId={(row) => row.entity_type_id}
+            pagination
+            pageSizeOptions={[25, 50, 100]}
+            initialState={{
+              pagination: {
+                paginationModel: { pageSize: 25 },
+              },
+            }}
+            disableRowSelectionOnClick
+            onRowClick={handleRowClick}
+            getRowHeight={() => "auto"}
+            sx={{
+              "& .MuiDataGrid-cell": {
+                fontSize: "0.875rem",
+                display: "flex",
+                alignItems: "center",
+                lineHeight: "unset !important",
+                maxHeight: "none !important",
+                whiteSpace: "unset",
+              },
+              "& .MuiDataGrid-row": {
+                maxHeight: "none !important",
+              },
+              "& .MuiDataGrid-renderingZone": {
+                maxHeight: "none !important",
+              },
+              "& .MuiDataGrid-columnHeaders": {
+                backgroundColor: "rgba(25, 118, 210, 0.15) !important", // Slightly more visible blue
+                borderBottom: "1px solid rgba(25, 118, 210, 0.2) !important",
+              },
+              "& .MuiDataGrid-columnHeader": {
+                backgroundColor: "rgba(25, 118, 210, 0.15) !important",
+                display: "flex",
+                alignItems: "center",
+              },
+            }}
+          />
+        )}
       </Box>
 
       {/* Edit Modal */}
@@ -271,12 +344,10 @@ const EntityTypesTable: React.FC = () => {
             p: 0,
           }}
         >
-          {editingEntityType && (
-            <EntityTypeForm
-              editingEntityType={editingEntityType}
-              onClose={handleCloseModal}
-            />
-          )}
+          <EntityTypeForm
+            editingEntityType={editingEntityType || undefined}
+            onClose={handleCloseModal}
+          />
         </Box>
       </Modal>
     </Box>

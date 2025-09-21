@@ -1,9 +1,7 @@
 import { userPool } from "../config/cognito";
 
-// Use actual AWS API Gateway URL in production, proxy in development
-const API_BASE_URL = import.meta.env.PROD 
-  ? "https://zwkvk3lyl3.execute-api.us-east-2.amazonaws.com/dev"
-  : "/api";
+// Always use the production API endpoint
+const API_BASE_URL = "https://api.onebor.com/panda";
 
 // Client Groups
 export interface ClientGroup {
@@ -16,23 +14,23 @@ export interface ClientGroup {
 const getAuthToken = (): Promise<string | null> => {
   return new Promise((resolve) => {
     const currentUser = userPool.getCurrentUser();
-    console.log("🔍 getAuthToken - currentUser:", !!currentUser);
+    // console.log("🔍 getAuthToken - currentUser:", !!currentUser);
     if (!currentUser) {
       console.log("❌ getAuthToken - No current user");
       resolve(null);
       return;
     }
 
-    console.log(
-      "🔍 getAuthToken - Getting session for user:",
-      currentUser.getUsername()
-    );
+    // console.log(
+    //   "🔍 getAuthToken - Getting session for user:",
+    //   currentUser.getUsername()
+    // );
     currentUser.getSession((err: any, session: any) => {
-      console.log("🔍 getAuthToken - Session callback:", {
-        err: !!err,
-        session: !!session,
-        isValid: session?.isValid(),
-      });
+      // console.log("🔍 getAuthToken - Session callback:", {
+      //   err: !!err,
+      //   session: !!session,
+      //   isValid: session?.isValid(),
+      // });
       if (err) {
         console.log("❌ getAuthToken - Session error:", err);
         resolve(null);
@@ -45,7 +43,7 @@ const getAuthToken = (): Promise<string | null> => {
       }
 
       const idToken = session.getIdToken().getJwtToken();
-      console.log("✅ getAuthToken - Got token, length:", idToken.length);
+      // console.log("✅ getAuthToken - Got token, length:", idToken.length);
       resolve(idToken);
     });
   });
@@ -53,7 +51,7 @@ const getAuthToken = (): Promise<string | null> => {
 
 // Base API call function with auth
 const apiCall = async <T>(endpoint: string, data: any): Promise<T> => {
-  console.log("🚀 apiCall - Starting call to:", endpoint);
+  // console.log("🚀 apiCall - Starting call to:", endpoint);
   const token = await getAuthToken();
 
   if (!token) {
@@ -61,8 +59,11 @@ const apiCall = async <T>(endpoint: string, data: any): Promise<T> => {
     throw new Error("No authentication token available");
   }
 
-  console.log("📡 apiCall - Making request with token");
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const fullUrl = `${API_BASE_URL}${endpoint}`;
+  // console.log("📡 apiCall - Making request to:", fullUrl);
+  // console.log("📡 apiCall - Request data:", data);
+
+  const response = await fetch(fullUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -71,7 +72,7 @@ const apiCall = async <T>(endpoint: string, data: any): Promise<T> => {
     body: JSON.stringify(data),
   });
 
-  console.log("📡 apiCall - Response status:", response.status);
+  // console.log("📡 apiCall - Response status:", response.status);
   if (!response.ok) {
     const errorText = await response.text();
     console.log("❌ apiCall - Error response:", errorText);
@@ -79,7 +80,7 @@ const apiCall = async <T>(endpoint: string, data: any): Promise<T> => {
   }
 
   const result = await response.json();
-  console.log("✅ apiCall - Success:", endpoint);
+  // console.log("✅ apiCall - Success:", endpoint);
   return result;
 };
 
@@ -87,6 +88,8 @@ const apiCall = async <T>(endpoint: string, data: any): Promise<T> => {
 export interface EntityType {
   entity_type_id: number;
   name: string;
+  short_label?: string;
+  label_color?: string;
   attributes_schema: any;
 }
 
@@ -98,7 +101,9 @@ export interface CreateEntityTypeRequest {
 }
 
 export interface QueryEntityTypesRequest {
-  // No parameters needed - always returns all entity types
+  count_only?: boolean;
+  limit?: number;
+  offset?: number;
 }
 
 export type QueryEntityTypesResponse = EntityType[];
@@ -178,6 +183,17 @@ export const updateEntityType = async (
   return apiCall<EntityType>("/update_entity_type", data);
 };
 
+// Delete record function
+export const deleteRecord = async (
+  recordId: number | string,
+  recordType: string
+): Promise<{ success: boolean; message: string }> => {
+  return apiCall<{ success: boolean; message: string }>("/delete_record", {
+    record_id: recordId,
+    record_type: recordType,
+  });
+};
+
 // Users
 export interface User {
   user_id: number; // Auto-increment integer
@@ -206,6 +222,7 @@ export interface QueryUsersRequest {
   user_id?: number; // Database user ID
   sub?: string; // Cognito user ID
   email?: string;
+  requesting_user_id?: number; // For access control - only see users in shared client groups
 }
 
 export type QueryUsersResponse = User[];
@@ -215,6 +232,7 @@ export type QueryUsersResponse = User[];
 export interface CreateClientGroupRequest {
   name: string;
   preferences?: any;
+  user_id?: number;
 }
 
 export interface UpdateClientGroupRequest {
@@ -253,6 +271,15 @@ export const queryClientGroups = async (
 
 export const updateClientGroup = async (
   data: UpdateClientGroupRequest | CreateClientGroupRequest
+): Promise<{ success: boolean; id: number }> => {
+  return apiCall<{ success: boolean; id: number }>(
+    "/update_client_group",
+    data
+  );
+};
+
+export const createClientGroup = async (
+  data: CreateClientGroupRequest
 ): Promise<{ success: boolean; id: number }> => {
   return apiCall<{ success: boolean; id: number }>(
     "/update_client_group",
@@ -310,7 +337,149 @@ export interface ModifyClientGroupMembershipRequest {
 export const modifyClientGroupMembership = async (
   data: ModifyClientGroupMembershipRequest
 ): Promise<{ success: boolean }> => {
-  return apiCall<{ success: boolean }>("/modify_client_group_membership", data);
+  console.log(
+    "🔧 API - modifyClientGroupMembership called with:",
+    JSON.stringify(data, null, 2)
+  );
+  const result = await apiCall<{ success: boolean }>(
+    "/modify_client_group_membership",
+    data
+  );
+  console.log(
+    "🔧 API - modifyClientGroupMembership result:",
+    JSON.stringify(result, null, 2)
+  );
+  return result;
+};
+
+// Client Group Entities interfaces and API functions
+export interface ModifyClientGroupEntitiesRequest {
+  client_group_id: number;
+  entity_ids: number[]; // Array of entity_ids that should be in the group
+}
+
+export interface ModifyClientGroupEntitiesResponse {
+  success: boolean;
+  added_count: number;
+  removed_count: number;
+  current_entity_ids: number[];
+  desired_entity_ids: number[];
+  entities_added: number[];
+  entities_removed: number[];
+}
+
+export const modifyClientGroupEntities = async (
+  data: ModifyClientGroupEntitiesRequest
+): Promise<ModifyClientGroupEntitiesResponse> => {
+  console.log(
+    "🔧 API - modifyClientGroupEntities called with:",
+    JSON.stringify(data, null, 2)
+  );
+  const result = await apiCall<ModifyClientGroupEntitiesResponse>(
+    "/modify_client_group_entities",
+    data
+  );
+  console.log(
+    "🔧 API - modifyClientGroupEntities result:",
+    JSON.stringify(result, null, 2)
+  );
+  return result;
+};
+
+export interface QueryClientGroupEntitiesRequest {
+  client_group_id: number;
+  user_id: number;
+}
+
+export const queryClientGroupEntities = async (
+  data: QueryClientGroupEntitiesRequest
+): Promise<number[]> => {
+  // For now, we'll use the existing getPandaEntities endpoint with client_group_id filter
+  // This returns entity objects, but we just need the IDs
+  const result = await apiCall<any[]>("/get_entities", {
+    client_group_id: data.client_group_id,
+    user_id: data.user_id,
+  });
+  return result.map((entity) =>
+    typeof entity === "object" ? entity.entity_id : entity
+  );
+};
+
+export interface QueryEntityCountRequest {
+  user_id: number;
+  client_group_id?: number;
+  entity_type_id?: number;
+  parent_entity_id?: number;
+}
+
+export const queryEntityCount = async (
+  data: QueryEntityCountRequest
+): Promise<number> => {
+  const result = await apiCall<number>("/get_entities", {
+    ...data,
+    count_only: true,
+  });
+  return result;
+};
+
+// Entity Types count
+export const queryEntityTypeCount = async (): Promise<number> => {
+  const result = await apiCall<number>("/get_entity_types", {
+    count_only: true,
+  });
+  return result;
+};
+
+// Users count
+export interface QueryUserCountRequest {
+  requesting_user_id?: number;
+  user_id?: number;
+  sub?: string;
+  email?: string;
+}
+
+export const queryUserCount = async (
+  data: QueryUserCountRequest
+): Promise<number> => {
+  const result = await apiCall<number>("/get_users", {
+    ...data,
+    count_only: true,
+  });
+  return result;
+};
+
+// Client Groups count
+export interface QueryClientGroupCountRequest {
+  user_id?: number;
+  client_group_id?: number;
+  group_name?: string;
+}
+
+export const queryClientGroupCount = async (
+  data: QueryClientGroupCountRequest
+): Promise<number> => {
+  const result = await apiCall<number>("/get_client_groups", {
+    ...data,
+    count_only: true,
+  });
+  return result;
+};
+
+// Invitations count
+export interface QueryInvitationCountRequest {
+  client_group_id?: number;
+  code?: string;
+}
+
+export const queryInvitationCount = async (
+  data: QueryInvitationCountRequest
+): Promise<number> => {
+  const result = await apiCall<number>("/manage_invitation", {
+    action: "get",
+    ...data,
+    count_only: true,
+  });
+  return result;
 };
 
 // Invitation API functions
@@ -334,43 +503,52 @@ export const updateUserSub = async (
 // Utility function to parse and humanize API errors
 export const parseApiError = (error: Error): string => {
   const message = error.message;
-  
+
   // Handle API call errors with JSON responses
-  if (message.includes('API call failed:')) {
+  if (message.includes("API call failed:")) {
     try {
       // Extract JSON from error message like "API call failed: 500 {"error": "..."}"
       const jsonMatch = message.match(/\{.*\}$/);
       if (jsonMatch) {
         const errorResponse = JSON.parse(jsonMatch[0]);
         const errorText = errorResponse.error || errorResponse.message;
-        
+
         // Handle specific database errors
-        if (typeof errorText === 'string') {
+        if (typeof errorText === "string") {
           // Duplicate entry errors
-          if (errorText.includes('Duplicate entry') && errorText.includes('client_groups.name')) {
+          if (
+            errorText.includes("Duplicate entry") &&
+            errorText.includes("client_groups.name")
+          ) {
             const nameMatch = errorText.match(/Duplicate entry '([^']+)'/);
-            const orgName = nameMatch ? nameMatch[1] : 'that name';
+            const orgName = nameMatch ? nameMatch[1] : "that name";
             return `That organization name "${orgName}" is already in use. Please try a different name.`;
           }
-          
+
           // Other duplicate entry errors
-          if (errorText.includes('Duplicate entry')) {
-            return 'This record already exists. Please check your input and try again.';
+          if (errorText.includes("Duplicate entry")) {
+            return "This record already exists. Please check your input and try again.";
           }
-          
+
           // Foreign key constraint errors
-          if (errorText.includes('foreign key constraint')) {
-            return 'Unable to complete this action due to related data constraints.';
+          if (errorText.includes("foreign key constraint")) {
+            return "Unable to complete this action due to related data constraints.";
           }
-          
+
           // Connection errors
-          if (errorText.includes('connection') || errorText.includes('timeout')) {
-            return 'Connection error. Please check your internet connection and try again.';
+          if (
+            errorText.includes("connection") ||
+            errorText.includes("timeout")
+          ) {
+            return "Connection error. Please check your internet connection and try again.";
           }
-          
+
           // Access denied errors
-          if (errorText.includes('Access denied') || errorText.includes('permission')) {
-            return 'You do not have permission to perform this action.';
+          if (
+            errorText.includes("Access denied") ||
+            errorText.includes("permission")
+          ) {
+            return "You do not have permission to perform this action.";
           }
         }
       }
@@ -378,12 +556,12 @@ export const parseApiError = (error: Error): string => {
       // If we can't parse the JSON, fall back to basic cleanup
     }
   }
-  
+
   // Generic cleanup for other errors
-  if (message.includes('API call failed:')) {
-    return 'An error occurred while processing your request. Please try again.';
+  if (message.includes("API call failed:")) {
+    return "An error occurred while processing your request. Please try again.";
   }
-  
+
   // Return the original message if no specific handling applies
   return message;
 };

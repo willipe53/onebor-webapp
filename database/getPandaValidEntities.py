@@ -16,6 +16,23 @@ def get_connection(s): return pymysql.connect(
 
 
 def lambda_handler(event, context):
+    # CORS headers for all responses
+    cors_headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "https://app.onebor.com",
+        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Credentials": "true"
+    }
+    
+    # Handle preflight OPTIONS requests
+    if event.get('httpMethod') == 'OPTIONS':
+        return {
+            "statusCode": 200,
+            "headers": cors_headers,
+            "body": ""
+        }
+    
     conn = None
     try:
         body = event.get("body")
@@ -28,7 +45,7 @@ def lambda_handler(event, context):
         user_id = body.get("user_id")
 
         if not client_group_id and not user_id:
-            return {"statusCode": 400, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"error": "Must pass client_group_id or user_id"})}
+            return {"statusCode": 400, "headers": cors_headers, "body": json.dumps({"error": "Must pass client_group_id or user_id"})}
 
         s = get_db_secret()
         conn = get_connection(s)
@@ -54,9 +71,9 @@ def lambda_handler(event, context):
         with conn.cursor() as c:
             c.execute(q, params)
             rows = c.fetchall()
-        return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps(rows, default=str)}
+        return {"statusCode": 200, "headers": cors_headers, "body": json.dumps(rows, default=str)}
     except Exception as e:
-        return {"statusCode": 500, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"error": str(e)})}
+        return {"statusCode": 500, "headers": cors_headers, "body": json.dumps({"error": str(e)})}
     finally:
         if conn:
             conn.close()

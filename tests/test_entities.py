@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Comprehensive tests for Entity APIs.
 Tests follow the pattern: modify -> validate -> revert -> validate -> cleanup
@@ -22,7 +23,6 @@ class TestEntities(BaseAPITest):
         existing_entities = self.get_entities()
         if len(existing_entities) == 0:
             # Create a test entity if none exist
-            test_entity_name = self.generate_test_name("TEMP_ENTITY")
             create_result = self.create_entity(
                 test_entity_name, test_entity_type_id)
             entity_id = create_result['entity_id']
@@ -94,7 +94,6 @@ class TestEntities(BaseAPITest):
         assert len(entity_types) > 0, "No entity types available for testing"
         test_entity_type_id = entity_types[0]['entity_type_id']
 
-        test_name = self.generate_test_name("ENTITY")
         test_attributes = {
             "description": "Test entity for automated testing",
             "category": "test",
@@ -144,7 +143,6 @@ class TestEntities(BaseAPITest):
     def test_entity_get_with_filters(self):
         """Test getting entities with various filter parameters."""
         # Create entity type and entities for filtering tests
-        test_type_name = self.generate_test_name("FILTER_TYPE")
         test_schema = {"filter_field": {"type": "string"}}
         type_result = self.create_entity_type(test_type_name, test_schema)
         test_entity_type_id = type_result['entity_type_id']
@@ -152,7 +150,6 @@ class TestEntities(BaseAPITest):
         # Create test entities
         test_entities = []
         for i in range(3):
-            entity_name = self.generate_test_name(f"FILTER_ENTITY_{i}")
             entity_result = self.create_entity(entity_name, test_entity_type_id,
                                                attributes={"filter_field": f"value_{i}"})
             test_entities.append({
@@ -202,19 +199,16 @@ class TestEntities(BaseAPITest):
     def test_entity_parent_child_relationships(self):
         """Test entity parent-child relationships."""
         # Create entity type
-        test_type_name = self.generate_test_name("HIERARCHY_TYPE")
         test_schema = {"level": {"type": "string"}}
         type_result = self.create_entity_type(test_type_name, test_schema)
         test_entity_type_id = type_result['entity_type_id']
 
         # Create parent entity
-        parent_name = self.generate_test_name("PARENT_ENTITY")
         parent_result = self.create_entity(parent_name, test_entity_type_id,
                                            attributes={"level": "parent"})
         parent_id = parent_result['entity_id']
 
         # Create child entity
-        child_name = self.generate_test_name("CHILD_ENTITY")
         child_result = self.create_entity(child_name, test_entity_type_id,
                                           parent_entity_id=parent_id,
                                           attributes={"level": "child"})
@@ -262,7 +256,6 @@ class TestEntities(BaseAPITest):
     def test_entity_attributes_operations(self):
         """Test entity attribute management."""
         # Create entity type with schema
-        test_type_name = self.generate_test_name("ATTR_TYPE")
         test_schema = {
             "string_field": {"type": "string"},
             "number_field": {"type": "number"},
@@ -273,7 +266,6 @@ class TestEntities(BaseAPITest):
         test_entity_type_id = type_result['entity_type_id']
 
         # Create entity with initial attributes
-        entity_name = self.generate_test_name("ATTR_ENTITY")
         initial_attributes = {
             "string_field": "initial_value",
             "number_field": 100,
@@ -345,7 +337,6 @@ class TestEntities(BaseAPITest):
     def test_entity_multiple_operations(self):
         """Test multiple entity operations in sequence."""
         # Create entity type
-        test_type_name = self.generate_test_name("MULTI_ENTITY_TYPE")
         test_schema = {"index": {"type": "number"}}
         type_result = self.create_entity_type(test_type_name, test_schema)
         test_entity_type_id = type_result['entity_type_id']
@@ -355,7 +346,6 @@ class TestEntities(BaseAPITest):
         test_entities = []
 
         for i in range(entity_count):
-            entity_name = self.generate_test_name(f"MULTI_ENTITY_{i}")
             entity_attributes = {"index": i,
                                  "description": f"Entity number {i}"}
 

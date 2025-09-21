@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Comprehensive tests for Client Group APIs.
 Tests follow the pattern: modify -> validate -> revert -> validate -> cleanup
@@ -17,7 +18,6 @@ class TestClientGroups(BaseAPITest):
 
         # If no existing groups, create one for testing
         if len(existing_groups) == 0:
-            test_name = self.generate_test_name("UPDATE_REVERT_TEST")
             create_result = self.create_client_group(test_name)
             original_group_id = create_result['id']
             original_name = test_name
@@ -61,7 +61,6 @@ class TestClientGroups(BaseAPITest):
     @pytest.mark.integration
     def test_client_group_create_and_delete_cycle(self):
         """Test creating a new client group and then deleting it."""
-        test_name = self.generate_test_name("CLIENT_GROUP")
 
         # Step 1: Create new client group
         create_result = self.create_client_group(test_name)
@@ -103,7 +102,6 @@ class TestClientGroups(BaseAPITest):
     def test_client_group_get_with_filters(self):
         """Test getting client groups with various filter parameters."""
         # Create a test group for filtering tests
-        test_name = self.generate_test_name("FILTER_TEST")
         create_result = self.create_client_group(test_name)
         created_group_id = create_result['id']
 
@@ -153,15 +151,12 @@ class TestClientGroups(BaseAPITest):
     def test_client_group_get_by_user_id(self):
         """Test getting client groups filtered by user_id."""
         # First, we need to create a user and a client group, then associate them
-        test_user_id = f"test_user_{self.get_test_timestamp()}"
-        test_email = f"test_{self.get_test_timestamp()}@example.com"
+        test_user_id = self.test_user_id
         test_user_name = f"Test User {self.get_test_timestamp()}"
 
         # Create test user
-        self.create_user(test_user_id, test_email, test_user_name)
 
         # Create test client group
-        test_group_name = self.generate_test_name("USER_GROUP")
         create_result = self.create_client_group(test_group_name)
         created_group_id = create_result['id']
 
@@ -195,7 +190,6 @@ class TestClientGroups(BaseAPITest):
     def test_client_group_update_validation(self):
         """Test client group update with various validation scenarios."""
         # Create a test group for update testing
-        original_name = self.generate_test_name("UPDATE_TEST")
         create_result = self.create_client_group(original_name)
         group_id = create_result['id']
 
@@ -238,15 +232,12 @@ class TestClientGroups(BaseAPITest):
     def test_client_group_delete_with_constraints(self):
         """Test client group deletion with referential integrity constraints."""
         # Create a test group
-        test_group_name = self.generate_test_name("DELETE_CONSTRAINT_TEST")
         create_result = self.create_client_group(test_group_name)
         group_id = create_result['id']
 
         # Create a test user
-        test_user_id = f"constraint_user_{self.get_test_timestamp()}"
-        test_email = f"constraint_{self.get_test_timestamp()}@example.com"
+        test_user_id = self.test_user_id
         test_user_name = f"Constraint User {self.get_test_timestamp()}"
-        self.create_user(test_user_id, test_email, test_user_name)
 
         # Associate user with the group
         self.modify_client_group_membership(group_id, test_user_id, "add")
@@ -330,7 +321,6 @@ class TestClientGroups(BaseAPITest):
         existing_groups = self.get_client_groups()
         if len(existing_groups) == 0:
             # Create a test group if none exist
-            test_name = self.generate_test_name("PREFERENCES_TEST")
             create_result = self.create_client_group(test_name)
             test_group_id = create_result['id']
             original_preferences = None

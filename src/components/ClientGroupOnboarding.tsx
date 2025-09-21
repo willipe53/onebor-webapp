@@ -286,7 +286,7 @@ const ClientGroupOnboarding: React.FC<ClientGroupOnboardingProps> = ({
               disabled={createClientGroupMutation.isPending}
               autoFocus
               sx={{ mb: 2 }}
-              helperText="This will be used to identify your organization in OneBor"
+              helperText="This will be used to identify your organization in the app"
             />
             {error && (
               <Alert severity="error" sx={{ mb: 2 }}>
@@ -411,7 +411,7 @@ const ClientGroupOnboarding: React.FC<ClientGroupOnboardingProps> = ({
                 error.includes("organization name") &&
                 error.includes("already in use")
                   ? error
-                  : "We are sorry we cannot give you access to OneBor without assigning you to a client organization."}
+                  : "We are sorry we cannot give you access to onebor.ai without assigning you to a client organization."}
               </Typography>
             </Alert>
             {!(
@@ -420,7 +420,7 @@ const ClientGroupOnboarding: React.FC<ClientGroupOnboardingProps> = ({
               error.includes("already in use")
             ) && (
               <Typography variant="body1" sx={{ lineHeight: 1.6 }}>
-                Please contact the person at your firm who administers OneBor
+                Please contact the person at your firm who administers onebor.ai
                 for further instructions.
               </Typography>
             )}

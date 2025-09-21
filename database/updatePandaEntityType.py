@@ -24,6 +24,23 @@ def get_connection(secrets):
 
 
 def lambda_handler(event, context):
+    # CORS headers for all responses
+    cors_headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "https://app.onebor.com",
+        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Credentials": "true"
+    }
+    
+    # Handle preflight OPTIONS requests
+    if event.get('httpMethod') == 'OPTIONS':
+        return {
+            "statusCode": 200,
+            "headers": cors_headers,
+            "body": ""
+        }
+    
     conn = None
     try:
         # Parse incoming request
@@ -102,14 +119,14 @@ def lambda_handler(event, context):
 
         return {
             "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
+            "headers": cors_headers,
             "body": json.dumps(result)
         }
 
     except Exception as e:
         return {
             "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
+            "headers": cors_headers,
             "body": json.dumps({"error": str(e)})
         }
     finally:

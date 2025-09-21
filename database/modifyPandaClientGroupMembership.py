@@ -14,6 +14,23 @@ def get_connection(s): return pymysql.connect(host=s["DB_HOST"], user=s["DB_USER
 
 
 def lambda_handler(event, context):
+    # CORS headers for all responses
+    cors_headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "https://app.onebor.com",
+        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Credentials": "true"
+    }
+    
+    # Handle preflight OPTIONS requests
+    if event.get('httpMethod') == 'OPTIONS':
+        return {
+            "statusCode": 200,
+            "headers": cors_headers,
+            "body": ""
+        }
+    
     conn = None
     try:
         body = event.get("body")
@@ -24,6 +41,10 @@ def lambda_handler(event, context):
 
         client_group_id, user_id, action = body.get("client_group_id"), body.get(
             "user_id"), str(body.get("add_or_remove", "")).lower()
+
+        print(
+            f"DEBUG: Received parameters - client_group_id: {client_group_id}, user_id: {user_id}, action: {action}")
+
         s = get_db_secret()
         conn = get_connection(s)
 
@@ -34,14 +55,21 @@ def lambda_handler(event, context):
             q = "DELETE FROM client_group_users WHERE client_group_id=%s AND user_id=%s"
             params = [client_group_id, user_id]
         else:
-            return {"statusCode": 400, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"error": "Invalid add_or_remove value"})}
+            return {"statusCode": 400, "headers": cors_headers, "body": json.dumps({"error": "Invalid add_or_remove value"})}
+
+        print(f"DEBUG: Executing query: {q} with params: {params}")
 
         with conn.cursor() as c:
             c.execute(q, params)
+            rows_affected = c.rowcount
             conn.commit()
-        return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"success": True})}
+
+        print(
+            f"DEBUG: Query executed successfully, rows affected: {rows_affected}")
+
+        return {"statusCode": 200, "headers": cors_headers, "body": json.dumps({"success": True, "rows_affected": rows_affected})}
     except Exception as e:
-        return {"statusCode": 500, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"error": str(e)})}
+        return {"statusCode": 500, "headers": cors_headers, "body": json.dumps({"error": str(e)})}
     finally:
         if conn:
             conn.close()

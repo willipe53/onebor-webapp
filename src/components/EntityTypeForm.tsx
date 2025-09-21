@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -75,8 +75,39 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
   );
   const [jsonError, setJsonError] = useState("");
   const [showSuccessSnackbar, setShowSuccessSnackbar] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [initialFormState, setInitialFormState] = useState<{
+    name: string;
+    shortLabel: string;
+    labelColor: string;
+    attributesSchema: string;
+  } | null>(null);
 
   const queryClient = useQueryClient();
+
+  // Function to check if form is dirty
+  const checkIfDirty = useCallback(() => {
+    if (!initialFormState) return false;
+
+    const currentState = {
+      name,
+      shortLabel,
+      labelColor,
+      attributesSchema,
+    };
+
+    return (
+      currentState.name !== initialFormState.name ||
+      currentState.shortLabel !== initialFormState.shortLabel ||
+      currentState.labelColor !== initialFormState.labelColor ||
+      currentState.attributesSchema !== initialFormState.attributesSchema
+    );
+  }, [name, shortLabel, labelColor, attributesSchema, initialFormState]);
+
+  // Update dirty state whenever form values change
+  useEffect(() => {
+    setIsDirty(checkIfDirty());
+  }, [checkIfDirty]);
 
   // Populate form when editing an entity type
   useEffect(() => {
@@ -118,6 +149,53 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
           );
         }
       }
+
+      // Set initial form state for dirty tracking (after all fields are populated)
+      setTimeout(() => {
+        let color = editingEntityType.label_color || "4caf50";
+        if (color && !color.startsWith("#")) {
+          color = "#" + color;
+        }
+
+        let schema;
+        if (editingEntityType.attributes_schema) {
+          try {
+            schema =
+              typeof editingEntityType.attributes_schema === "string"
+                ? editingEntityType.attributes_schema
+                : JSON.stringify(editingEntityType.attributes_schema, null, 2);
+          } catch {
+            schema = JSON.stringify(
+              { type: "object", properties: {} },
+              null,
+              2
+            );
+          }
+        } else {
+          schema = JSON.stringify({ type: "object", properties: {} }, null, 2);
+        }
+
+        setInitialFormState({
+          name: editingEntityType.name || "",
+          shortLabel: editingEntityType.short_label || "",
+          labelColor: color,
+          attributesSchema: schema,
+        });
+        setIsDirty(false); // Reset dirty state when loading existing entity type
+      }, 0);
+    } else {
+      // For new entity types, set initial state immediately
+      setInitialFormState({
+        name: "",
+        shortLabel: "",
+        labelColor: "#4caf50",
+        attributesSchema: JSON.stringify(
+          { type: "object", properties: {} },
+          null,
+          2
+        ),
+      });
+      setIsDirty(false);
     }
   }, [editingEntityType]);
 
@@ -241,7 +319,8 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
     name.trim() &&
     !jsonError &&
     isValidHexColor(labelColor) &&
-    !mutation.isPending;
+    !mutation.isPending &&
+    (editingEntityType?.entity_type_id ? isDirty : true); // For existing types, require dirty; for new types, always allow
 
   return (
     <Box
@@ -540,8 +619,8 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
                     <CircularProgress size={20} sx={{ mr: 1 }} />
                     {editingEntityType ? "Updating..." : "Creating..."}
                   </>
-                ) : editingEntityType ? (
-                  "Update Entity Type"
+                ) : editingEntityType?.entity_type_id ? (
+                  `Update ${editingEntityType.name}`
                 ) : (
                   "Create Entity Type"
                 )}

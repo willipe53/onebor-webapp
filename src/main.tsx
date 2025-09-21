@@ -9,6 +9,8 @@ const queryClient = new QueryClient({
     queries: {
       retry: 2,
       staleTime: 5 * 60 * 1000, // 5 minutes
+      refetchOnWindowFocus: false, // Disable automatic refetch on window focus
+      refetchOnReconnect: false, // Disable automatic refetch on network reconnect
     },
   },
 });

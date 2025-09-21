@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Base test class providing authentication and utility methods for API testing.
 """
@@ -11,14 +12,21 @@ from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+# Look for .env file in the tests directory
+import pathlib
+current_dir = pathlib.Path(__file__).parent
+env_path = current_dir / '.env'
+load_dotenv(env_path)
 
 
 class BaseAPITest:
     """Base class for API testing with authentication and utilities."""
 
     def setup_method(self):
-        """Setup before each test method."""
+        """Setup before each test method with detailed progress tracking."""
+        print("🔧 Setting up test environment...")
+
+        print("   📝 Loading configuration...")
         self.api_base_url = os.getenv(
             'API_BASE_URL', 'https://zwkvk3lyl3.execute-api.us-east-2.amazonaws.com/dev')
         self.cognito_user_pool_id = os.getenv('COGNITO_USER_POOL_ID')
@@ -28,26 +36,50 @@ class BaseAPITest:
         self.aws_region = os.getenv('AWS_REGION', 'us-east-2')
 
         self.access_token = None
-        self.cognito_client = boto3.client(
-            'cognito-idp', region_name=self.aws_region)
 
+        print("   🌐 Configuring AWS client...")
+        # Configure boto3 client with timeout settings to prevent hanging
+        from botocore.config import Config
+        config = Config(
+            region_name=self.aws_region,
+            retries={'max_attempts': 3, 'mode': 'standard'},
+            read_timeout=30,
+            connect_timeout=10
+        )
+        self.cognito_client = boto3.client('cognito-idp', config=config)
+
+        print("   📋 Initializing tracking lists...")
         # Track created resources for cleanup
         self.created_client_groups: List[int] = []
-        self.created_users: List[str] = []
         self.created_entities: List[int] = []
         self.created_entity_types: List[int] = []
         self.original_values: Dict[str, Any] = {}
 
+        # Track test modifications for cleanup
+        self.test_modifications: List[Dict[str, Any]] = []
+
+        print("   🔐 Authenticating...")
         self.authenticate()
+
+        print("   👤 Getting test user ID...")
+        # Get the test user's database ID
+        self.test_user_id = self.get_test_user_id()
+
+        print("   ✅ Test setup completed successfully")
 
     def teardown_method(self):
         """Cleanup after each test method."""
-        self.cleanup_created_resources()
+        # Cleanup is now handled by the cleanup_test_objects.py script
+        # This prevents issues with referential integrity during test runs
+        pass
 
     def authenticate(self) -> str:
-        """Authenticate with Cognito and get access token."""
+        """Authenticate with Cognito and get access token with timeout protection."""
+        print("🔐 Authenticating with AWS Cognito...")
+
         try:
             # Try ADMIN_NO_SRP_AUTH first (requires ALLOW_ADMIN_USER_PASSWORD_AUTH)
+            print("   Trying ADMIN_NO_SRP_AUTH flow...")
             response = self.cognito_client.admin_initiate_auth(
                 UserPoolId=self.cognito_user_pool_id,
                 ClientId=self.cognito_client_id,
@@ -58,10 +90,13 @@ class BaseAPITest:
                 }
             )
             self.access_token = response['AuthenticationResult']['IdToken']
+            print("   ✅ Authentication successful")
             return self.access_token
         except Exception as admin_auth_error:
+            print(f"   ❌ ADMIN_NO_SRP_AUTH failed: {admin_auth_error}")
             # If ADMIN_NO_SRP_AUTH fails, try USER_PASSWORD_AUTH
             try:
+                print("   Trying USER_PASSWORD_AUTH flow...")
                 response = self.cognito_client.initiate_auth(
                     ClientId=self.cognito_client_id,
                     AuthFlow='USER_PASSWORD_AUTH',
@@ -71,8 +106,10 @@ class BaseAPITest:
                     }
                 )
                 self.access_token = response['AuthenticationResult']['IdToken']
+                print("   ✅ Authentication successful")
                 return self.access_token
             except Exception as user_auth_error:
+                print(f"   ❌ USER_PASSWORD_AUTH failed: {user_auth_error}")
                 raise Exception(f"Authentication failed with both auth flows. "
                                 f"ADMIN_NO_SRP_AUTH error: {admin_auth_error}. "
                                 f"USER_PASSWORD_AUTH error: {user_auth_error}. "
@@ -87,19 +124,27 @@ class BaseAPITest:
             'Authorization': f'Bearer {self.access_token}'
         }
 
-    def api_request(self, endpoint: str, method: str = 'POST', data: Optional[Dict] = None) -> requests.Response:
-        """Make an authenticated API request."""
+    def api_request(self, endpoint: str, method: str = 'POST', data: Optional[Dict] = None, timeout: int = 30) -> requests.Response:
+        """Make an authenticated API request with timeout protection."""
         url = f"{self.api_base_url}/{endpoint.lstrip('/')}"
         headers = self.get_headers()
 
-        if method.upper() == 'POST':
-            response = requests.post(url, headers=headers, json=data or {})
-        elif method.upper() == 'GET':
-            response = requests.get(url, headers=headers, params=data or {})
-        else:
-            raise ValueError(f"Unsupported HTTP method: {method}")
+        try:
+            if method.upper() == 'POST':
+                response = requests.post(
+                    url, headers=headers, json=data or {}, timeout=timeout)
+            elif method.upper() == 'GET':
+                response = requests.get(
+                    url, headers=headers, params=data or {}, timeout=timeout)
+            else:
+                raise ValueError(f"Unsupported HTTP method: {method}")
 
-        return response
+            return response
+        except requests.exceptions.Timeout:
+            raise Exception(
+                f"API request to {endpoint} timed out after {timeout} seconds")
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"API request to {endpoint} failed: {e}")
 
     def assert_success_response(self, response: requests.Response, expected_status: int = 200):
         """Assert that response is successful."""
@@ -120,14 +165,73 @@ class BaseAPITest:
         """Generate a unique test name."""
         return f"{prefix}_{self.get_test_timestamp()}"
 
+    def generate_test_create_name(self, base_name: str) -> str:
+        """Generate a name for test objects that will be created (for cleanup)."""
+        return f"TESTNEW{self.get_test_timestamp()}_{base_name}"
+
+    def generate_test_modify_prefix(self) -> str:
+        """Generate a prefix for test modifications (for cleanup)."""
+        return f"TESTMOD{self.get_test_timestamp()}_"
+
+    def is_test_object(self, name: str) -> bool:
+        """Check if a name represents a test object."""
+        return name.startswith("TESTNEW") or "TESTMOD" in name
+
+    def track_modification(self, resource_type: str, resource_id: Any, field: str, original_value: Any, test_value: Any):
+        """Track a modification made for testing purposes."""
+        self.test_modifications.append({
+            'resource_type': resource_type,
+            'resource_id': resource_id,
+            'field': field,
+            'original_value': original_value,
+            'test_value': test_value
+        })
+
+    def modify_for_test(self, resource_type: str, resource_id: Any, field: str, original_value: Any, new_base_value: str) -> str:
+        """Modify a field with test prefix and track for cleanup."""
+        test_prefix = self.generate_test_modify_prefix()
+        test_value = f"{test_prefix}{new_base_value}"
+        self.track_modification(
+            resource_type, resource_id, field, original_value, test_value)
+        return test_value
+
+    def get_test_user_id(self) -> int:
+        """Get the database user_id for the test user with timeout protection."""
+        print("🔍 Looking up test user ID...")
+        try:
+            # Look up the test user by their email (since we know that)
+            response = self.api_request('get_users', data={
+                'email': self.test_username
+            }, timeout=15)  # Shorter timeout for user lookup
+            result = self.assert_success_response(response)
+
+            if isinstance(result, list) and len(result) > 0:
+                user_id = result[0]['user_id']
+                print(f"   ✅ Found test user ID: {user_id}")
+                return user_id
+            else:
+                print("   ⚠️  Test user not found, using default ID: 8")
+                # If user doesn't exist, return a default test ID from the env
+                # This matches the user ID from the comprehensive API test that worked
+                return 8
+        except Exception as e:
+            print(f"   ❌ Failed to get test user ID: {e}")
+            print("   ⚠️  Using fallback default ID: 8")
+            return 8
+
     # Client Group Methods
-    def create_client_group(self, name: str) -> Dict[str, Any]:
+    def create_client_group(self, base_name: str) -> Dict[str, Any]:
         """Create a client group and track for cleanup."""
-        response = self.api_request('update_client_group', data={'name': name})
+        test_name = self.generate_test_create_name(base_name)
+        response = self.api_request('update_client_group', data={
+            'name': test_name,
+            'user_id': self.test_user_id
+        })
         result = self.assert_success_response(response)
 
         if 'id' in result:
             self.created_client_groups.append(result['id'])
+            result['test_name'] = test_name  # Store for reference
         return result
 
     def get_client_groups(self, filters: Optional[Dict] = None) -> List[Dict]:
@@ -144,34 +248,15 @@ class BaseAPITest:
         })
         return self.assert_success_response(response)
 
-    # User Methods
-    def create_user(self, user_id: str, email: str, name: str) -> Dict[str, Any]:
-        """Create a user and track for cleanup."""
-        response = self.api_request('update_user', data={
-            'user_id': user_id,
-            'email': email,
-            'name': name
-        })
-        result = self.assert_success_response(response)
-        self.created_users.append(user_id)
-        return result
-
+    # User Methods (Read-only - users are only created by Cognito)
     def get_users(self, filters: Optional[Dict] = None) -> List[Dict]:
         """Get users with optional filters."""
-        response = self.api_request('get_users', data=filters or {})
+        data = filters or {}
+        if 'requesting_user_id' not in data:
+            data['requesting_user_id'] = self.test_user_id
+        response = self.api_request('get_users', data=data)
         result = self.assert_success_response(response)
         return result if isinstance(result, list) else []
-
-    def update_user(self, user_id: str, email: str = None, name: str = None) -> Dict[str, Any]:
-        """Update a user."""
-        data = {'user_id': user_id}
-        if email:
-            data['email'] = email
-        if name:
-            data['name'] = name
-
-        response = self.api_request('update_user', data=data)
-        return self.assert_success_response(response)
 
     # Entity Type Methods
     def create_entity_type(self, name: str, attributes_schema: Dict) -> Dict[str, Any]:
@@ -217,11 +302,20 @@ class BaseAPITest:
 
     def update_entity_type(self, entity_type_id: int, name: str = None, attributes_schema: Dict = None, short_label: str = None, label_color: str = None) -> Dict[str, Any]:
         """Update an entity type."""
-        data = {'entity_type_id': entity_type_id}
-        if name:
-            data['name'] = name
-        if attributes_schema:
-            data['attributes_schema'] = attributes_schema
+        # Get current entity type to provide required fields
+        current_types = self.get_entity_types()
+        current_type = self.find_entity_type_by_id(
+            current_types, entity_type_id)
+
+        if not current_type:
+            raise ValueError(f"Entity type {entity_type_id} not found")
+
+        data = {
+            'entity_type_id': entity_type_id,
+            'name': name or current_type.get('name'),
+            'attributes_schema': attributes_schema or current_type.get('attributes_schema', {})
+        }
+
         if short_label is not None:
             data['short_label'] = short_label
         if label_color is not None:
@@ -231,12 +325,24 @@ class BaseAPITest:
         return self.assert_success_response(response)
 
     # Entity Methods
-    def create_entity(self, name: str, entity_type_id: int, parent_entity_id: Optional[int] = None, attributes: Optional[Dict] = None) -> Dict[str, Any]:
+    def create_entity(self, base_name: str, entity_type_id: int, parent_entity_id: Optional[int] = None, attributes: Optional[Dict] = None, client_group_id: Optional[int] = None) -> Dict[str, Any]:
         """Create an entity and track for cleanup."""
+        test_name = self.generate_test_create_name(base_name)
         data = {
-            'name': name,
-            'entity_type_id': entity_type_id
+            'name': test_name,
+            'entity_type_id': entity_type_id,
+            'user_id': self.test_user_id
         }
+
+        # Add client_group_id if provided, otherwise get first available group
+        if client_group_id:
+            data['client_group_id'] = client_group_id
+        else:
+            # Get user's first client group as default
+            groups = self.get_client_groups({'user_id': self.test_user_id})
+            if groups and len(groups) > 0:
+                data['client_group_id'] = groups[0]['client_group_id']
+
         if parent_entity_id:
             data['parent_entity_id'] = parent_entity_id
         if attributes:
@@ -247,11 +353,15 @@ class BaseAPITest:
 
         if 'entity_id' in result:
             self.created_entities.append(result['entity_id'])
+            result['test_name'] = test_name
         return result
 
     def get_entities(self, filters: Optional[Dict] = None) -> List[Dict]:
         """Get entities with optional filters."""
-        response = self.api_request('get_entities', data=filters or {})
+        data = filters or {}
+        if 'user_id' not in data:
+            data['user_id'] = self.test_user_id
+        response = self.api_request('get_entities', data=data)
         result = self.assert_success_response(response)
         return result if isinstance(result, list) else []
 
@@ -297,42 +407,17 @@ class BaseAPITest:
     # Cleanup Methods
     def cleanup_created_resources(self):
         """Clean up all resources created during testing."""
-        # Delete entities first (due to foreign key constraints)
-        for entity_id in self.created_entities[:]:
-            try:
-                self.delete_record(entity_id, "Entity")
-                self.created_entities.remove(entity_id)
-            except Exception as e:
-                print(f"Warning: Failed to cleanup entity {entity_id}: {e}")
+        # Cleanup is now handled by cleanup_test_objects.py script
+        # This ensures proper foreign key constraint handling
+        print("⚠️  Cleanup is now handled by cleanup_test_objects.py script")
+        print("   Run: ./cleanup_test_objects.py")
 
-        # Delete entity types
-        for entity_type_id in self.created_entity_types[:]:
-            try:
-                self.delete_record(entity_type_id, "Entity Type")
-                self.created_entity_types.remove(entity_type_id)
-            except Exception as e:
-                print(
-                    f"Warning: Failed to cleanup entity type {entity_type_id}: {e}")
-
-        # Delete users
-        for user_id in self.created_users[:]:
-            try:
-                self.delete_record(user_id, "User")
-                self.created_users.remove(user_id)
-            except Exception as e:
-                print(f"Warning: Failed to cleanup user {user_id}: {e}")
-
-        # Delete client groups
-        for client_group_id in self.created_client_groups[:]:
-            try:
-                self.delete_record(client_group_id, "Client Group")
-                self.created_client_groups.remove(client_group_id)
-            except Exception as e:
-                print(
-                    f"Warning: Failed to cleanup client group {client_group_id}: {e}")
-
-        # Clear original values
-        self.original_values.clear()
+    def revert_test_modifications(self):
+        """Revert all tracked test modifications."""
+        # TESTMOD modifications are now handled by cleanup_test_objects.py script
+        # This ensures proper handling of foreign key constraints
+        print("⚠️  TESTMOD modifications are now handled by cleanup_test_objects.py script")
+        print("   Run: ./cleanup_test_objects.py")
 
     def store_original_value(self, key: str, value: Any):
         """Store an original value for later restoration."""

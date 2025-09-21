@@ -24,6 +24,23 @@ def get_connection(secrets):
 
 
 def lambda_handler(event, context):
+    # CORS headers for all responses
+    cors_headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "https://app.onebor.com",
+        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Credentials": "true"
+    }
+    
+    # Handle preflight OPTIONS requests
+    if event.get('httpMethod') == 'OPTIONS':
+        return {
+            "statusCode": 200,
+            "headers": cors_headers,
+            "body": ""
+        }
+    
     conn = None
     try:
         # Parse input
@@ -38,7 +55,7 @@ def lambda_handler(event, context):
         if not user_id:
             return {
                 "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
+                "headers": cors_headers,
                 "body": json.dumps({"error": "user_id is required for data protection"})
             }
 
@@ -73,7 +90,7 @@ def lambda_handler(event, context):
                 if not existing_entity:
                     return {
                         "statusCode": 404,
-                        "headers": {"Content-Type": "application/json"},
+                        "headers": cors_headers,
                         "body": json.dumps({"error": f"Entity with ID {entity_id} not found or access denied"})
                     }
                 updates = []
@@ -136,7 +153,7 @@ def lambda_handler(event, context):
                 if not client_group_id:
                     return {
                         "statusCode": 400,
-                        "headers": {"Content-Type": "application/json"},
+                        "headers": cors_headers,
                         "body": json.dumps({"error": "client_group_id is required for creating new entities"})
                     }
 
@@ -150,7 +167,7 @@ def lambda_handler(event, context):
                 if access_check['count'] == 0:
                     return {
                         "statusCode": 403,
-                        "headers": {"Content-Type": "application/json"},
+                        "headers": cors_headers,
                         "body": json.dumps({"error": "Access denied: User does not belong to the specified client group"})
                     }
 
@@ -191,10 +208,10 @@ def lambda_handler(event, context):
 
                 result = {"message": "Entity created", "entity_id": new_id}
 
-        return {"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": json.dumps(result)}
+        return {"statusCode": 200, "headers": cors_headers, "body": json.dumps(result)}
 
     except Exception as e:
-        return {"statusCode": 500, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"error": str(e)})}
+        return {"statusCode": 500, "headers": cors_headers, "body": json.dumps({"error": str(e)})}
     finally:
         if conn:
             conn.close()

@@ -10,19 +10,23 @@ import {
   Tabs,
   Tab,
   CircularProgress,
+  Badge,
 } from "@mui/material";
-import { CheckCircle, Add, ViewList, PersonAdd } from "@mui/icons-material";
+import { ViewList, Email, Dashboard, People, Group } from "@mui/icons-material";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import { styled } from "@mui/material/styles";
 import oneborLogo from "../assets/images/oneborlogo.png";
-import EntityForm from "./EntityForm";
-import EntityTypeForm from "./EntityTypeForm";
+import leftfingerImage from "../assets/images/leftfinger.png";
 import EntitiesTable from "./EntitiesTable";
 import EntityTypesTable from "./EntityTypesTable";
+import InvitationsTable from "./InvitationsTable";
+import UsersTable from "./UsersTable";
+import ClientGroupsTable from "./ClientGroupsTable";
 import ClientGroupOnboarding from "./ClientGroupOnboarding";
-import { InviteUserForm } from "./InviteUserForm";
+import OneBorIntroduction from "./OneBorIntroduction";
 import { useClientGroupOnboarding } from "../hooks/useClientGroupOnboarding";
+import { parseServerDate } from "../utils";
 import * as apiService from "../services/api";
 
 const HeaderLogo = styled("img")({
@@ -33,13 +37,107 @@ const HeaderLogo = styled("img")({
 const SuccessPage: React.FC = () => {
   const { userEmail, userId, logout } = useAuth();
   const [currentTab, setCurrentTab] = useState(0);
-  const [inviteUserOpen, setInviteUserOpen] = useState(false);
+
+  // Get current user for count queries
+  const { data: currentUserData } = useQuery({
+    queryKey: ["user", userId],
+    queryFn: () => apiService.queryUsers({ sub: userId! }),
+    enabled: !!userId,
+  });
+
+  const currentUser =
+    currentUserData && currentUserData.length > 0 ? currentUserData[0] : null;
+
+  // Count queries for badge display
+  const { data: entitiesCount } = useQuery({
+    queryKey: ["entity-count", "all", currentUser?.user_id],
+    queryFn: () =>
+      apiService.queryEntityCount({
+        user_id: currentUser!.user_id,
+      }),
+    enabled: !!currentUser?.user_id,
+  });
+
+  const { data: entityTypesCount } = useQuery({
+    queryKey: ["entity-type-count"],
+    queryFn: () => apiService.queryEntityTypeCount(),
+  });
+
+  // Get user's client groups for invitation count
+  const { data: userClientGroups } = useQuery({
+    queryKey: ["client-groups", currentUser?.user_id],
+    queryFn: () =>
+      apiService.queryClientGroups({ user_id: currentUser!.user_id }),
+    enabled: !!currentUser?.user_id,
+  });
+
+  const { data: invitationsCount } = useQuery({
+    queryKey: ["invitation-count-unexpired", userClientGroups],
+    queryFn: async () => {
+      if (!userClientGroups || userClientGroups.length === 0) {
+        // console.log("🔍 SuccessPage - No client groups, invitation count = 0");
+        return 0;
+      }
+
+      let totalUnexpiredCount = 0;
+      for (const group of userClientGroups) {
+        try {
+          // Get all invitations for this group, then count unexpired ones
+          const invitations = await apiService.manageInvitation({
+            action: "get",
+            client_group_id: group.client_group_id,
+          });
+
+          const invitationArray = Array.isArray(invitations)
+            ? invitations
+            : [invitations];
+          const unexpiredCount = invitationArray.filter((invitation) => {
+            if (!invitation || !("expires_at" in invitation)) return false;
+            // Parse server date and check if not expired
+            const expiresAt = parseServerDate(invitation.expires_at);
+            const now = new Date();
+            return expiresAt > now;
+          }).length;
+
+          totalUnexpiredCount += unexpiredCount;
+        } catch (error) {
+          console.error(
+            `Error getting invitation count for group ${group.client_group_id}:`,
+            error
+          );
+        }
+      }
+      // console.log(
+      //   `🔍 SuccessPage - Total unexpired invitation count: ${totalUnexpiredCount}`
+      // );
+      return totalUnexpiredCount;
+    },
+    enabled: !!userClientGroups && userClientGroups.length > 0,
+  });
+
+  const { data: usersCount } = useQuery({
+    queryKey: ["user-count", currentUser?.user_id],
+    queryFn: () =>
+      apiService.queryUserCount({
+        requesting_user_id: currentUser!.user_id,
+      }),
+    enabled: !!currentUser?.user_id,
+  });
+
+  const { data: clientGroupsCount } = useQuery({
+    queryKey: ["client-group-count", currentUser?.user_id],
+    queryFn: () =>
+      apiService.queryClientGroupCount({
+        user_id: currentUser!.user_id,
+      }),
+    enabled: !!currentUser?.user_id,
+  });
 
   // Client group onboarding logic
-  console.log("🔍 SuccessPage - Calling useClientGroupOnboarding with:", {
-    userEmail,
-    userId,
-  });
+  // console.log("🔍 SuccessPage - Calling useClientGroupOnboarding with:", {
+  //   userEmail,
+  //   userId,
+  // });
   const {
     isLoading: onboardingLoading,
     needsOnboarding,
@@ -78,74 +176,94 @@ const SuccessPage: React.FC = () => {
     setCurrentTab(newValue);
   };
 
+  // Helper function to render tabs with badges
+  const renderTabWithBadge = (
+    icon: React.ReactElement,
+    label: string,
+    count?: number
+  ) => (
+    <Tab
+      icon={
+        count !== undefined ? (
+          <Badge
+            badgeContent={count}
+            sx={{
+              "& .MuiBadge-badge": {
+                backgroundColor: "#1976b2",
+                color: "white",
+              },
+            }}
+            max={999}
+          >
+            {icon}
+          </Badge>
+        ) : (
+          icon
+        )
+      }
+      label={label}
+    />
+  );
+
   const renderTabContent = () => {
     switch (currentTab) {
       case 0:
         return (
-          <Container maxWidth="md">
-            <Box
+          <Container maxWidth="lg">
+            {/* Welcome Section */}
+            <Paper
+              elevation={1}
               sx={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                minHeight: "60vh",
+                p: 2,
+                mt: 3,
+                mb: 3,
+                backgroundColor: "transparent",
+                borderRadius: 2,
               }}
             >
-              <Paper
-                elevation={3}
+              <Box
                 sx={{
-                  p: 6,
-                  textAlign: "center",
-                  borderRadius: 2,
-                  maxWidth: 500,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                  minHeight: 0,
                 }}
               >
-                <CheckCircle
-                  sx={{
-                    fontSize: 80,
-                    color: "success.main",
-                    mb: 3,
+                <img
+                  src={leftfingerImage}
+                  alt="Left finger pointing"
+                  style={{
+                    width: 60,
+                    height: "auto",
+                    alignSelf: "flex-end",
                   }}
                 />
-                <Typography variant="h3" color="primary" gutterBottom>
-                  Welcome to OneBor!
-                </Typography>
-                <Typography variant="h6" color="text.secondary" sx={{ mt: 2 }}>
-                  You're successfully logged in as:
-                </Typography>
-                <Typography
-                  variant="h5"
-                  color="text.primary"
-                  sx={{
-                    mt: 2,
-                    p: 2,
-                    backgroundColor: "grey.100",
-                    borderRadius: 1,
-                    fontFamily: "monospace",
-                  }}
-                >
-                  {userEmail}
-                </Typography>
-                <Typography
-                  variant="body1"
-                  color="text.secondary"
-                  sx={{ mt: 3 }}
-                >
-                  Use the tabs above to manage entities and entity types.
-                </Typography>
-              </Paper>
-            </Box>
+                <Box sx={{ flex: 1, lineHeight: 1.2 }}>
+                  <Typography variant="h6" sx={{ fontWeight: "bold", mb: 0.5 }}>
+                    Welcome to One Book of Record!
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.8, mb: "16px" }}>
+                    Logged in as: <strong>{userEmail}</strong> • Use the tabs
+                    above to manage your data
+                  </Typography>
+                </Box>
+              </Box>
+            </Paper>
+
+            {/* Introduction Section */}
+            <OneBorIntroduction />
           </Container>
         );
       case 1:
-        return <EntityForm />;
-      case 2:
-        return <EntityTypeForm />;
-      case 3:
         return <EntitiesTable />;
-      case 4:
+      case 2:
         return <EntityTypesTable />;
+      case 3:
+        return <ClientGroupsTable />;
+      case 4:
+        return <UsersTable />;
+      case 5:
+        return <InvitationsTable />;
       default:
         return null;
     }
@@ -156,10 +274,10 @@ const SuccessPage: React.FC = () => {
     return (
       <Box>
         {/* Header with Logout button */}
-        <AppBar position="static" color="primary">
+        <AppBar position="static" sx={{ backgroundColor: "#0b365a" }}>
           <Toolbar sx={{ justifyContent: "space-between" }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <HeaderLogo src={oneborLogo} alt="OneBor Logo" />
+              <HeaderLogo src={oneborLogo} alt="onebor.ai Logo" />
               {primaryClientGroup && (
                 <Typography
                   variant="h6"
@@ -203,10 +321,10 @@ const SuccessPage: React.FC = () => {
   return (
     <Box>
       {/* Header with Logout button */}
-      <AppBar position="static" color="primary">
+      <AppBar position="static" sx={{ backgroundColor: "#0b365a" }}>
         <Toolbar sx={{ justifyContent: "space-between" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <HeaderLogo src={oneborLogo} alt="OneBor Logo" />
+            <HeaderLogo src={oneborLogo} alt="onebor.ai Logo" />
             {primaryClientGroup && (
               <Typography
                 variant="h6"
@@ -237,22 +355,13 @@ const SuccessPage: React.FC = () => {
           }}
         >
           <Tabs value={currentTab} onChange={handleTabChange}>
-            <Tab label="Dashboard" />
-            <Tab icon={<Add />} label="New Entity" />
-            <Tab icon={<Add />} label="New Entity Type" />
-            <Tab icon={<ViewList />} label="Entities" />
-            <Tab icon={<ViewList />} label="Entity Types" />
+            <Tab icon={<Dashboard />} label="Dashboard" />
+            {renderTabWithBadge(<ViewList />, "Entities", entitiesCount)}
+            {renderTabWithBadge(<ViewList />, "Entity Types", entityTypesCount)}
+            {renderTabWithBadge(<Group />, "Client Groups", clientGroupsCount)}
+            {renderTabWithBadge(<People />, "Users", usersCount)}
+            {renderTabWithBadge(<Email />, "Invitations", invitationsCount)}
           </Tabs>
-          <Box sx={{ pr: 2 }}>
-            <Button
-              variant="outlined"
-              startIcon={<PersonAdd />}
-              onClick={() => setInviteUserOpen(true)}
-              sx={{ display: { xs: "none", sm: "flex" } }}
-            >
-              Invite User
-            </Button>
-          </Box>
         </Box>
       </Box>
 
@@ -266,12 +375,6 @@ const SuccessPage: React.FC = () => {
         userId={userId || ""}
         onComplete={handleOnboardingComplete}
         onCancel={handleOnboardingCancel}
-      />
-
-      {/* Invite User Modal */}
-      <InviteUserForm
-        open={inviteUserOpen}
-        onClose={() => setInviteUserOpen(false)}
       />
     </Box>
   );

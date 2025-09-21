@@ -425,7 +425,7 @@ const AcceptInvitation: React.FC = () => {
                 gutterBottom
                 align="center"
               >
-                Welcome to OneBor
+                Welcome to One Book of Record
               </Typography>
               <Typography variant="body1" align="center" sx={{ mb: 3 }}>
                 You've been invited to join a client organization.

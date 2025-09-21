@@ -24,9 +24,9 @@ def test_deployment():
             # Check if it's the React app (look for typical React app content)
             content = response.text.lower()
             if "onebor" in content or "react" in content or "vite" in content:
-                print("✅ App appears to be the OneBor React application")
+                print("✅ App appears to be the onebor React application")
             else:
-                print("⚠️  App loaded but may not be the correct OneBor application")
+                print("⚠️  App loaded but may not be the correct onebor application")
 
         else:
             print(f"❌ Main page returned status code: {response.status_code}")
@@ -54,7 +54,7 @@ def test_deployment():
 
 def main():
     """Main test function"""
-    print("🧪 Testing OneBor frontend deployment...")
+    print("🧪 Testing onebor frontend deployment...")
     print("⏳ Waiting 10 seconds for CloudFront to propagate...")
     time.sleep(10)
 
@@ -69,4 +69,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -9,10 +9,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': {
-        target: 'https://api.onebor.com',
+      "/api": {
+        target: "https://api.onebor.com",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '/panda'),
+        rewrite: (path) => path.replace(/^\/api/, "/panda"),
       },
     },
   },

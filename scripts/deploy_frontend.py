@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deploy OneBor frontend to S3 with CloudFront invalidation
+Deploy onebor frontend to S3 with CloudFront invalidation
 """
 
 import subprocess
@@ -105,7 +105,7 @@ def invalidate_cloudfront():
 
 def main():
     """Main deployment function"""
-    print("🚀 Starting OneBor frontend deployment...")
+    print("🚀 Starting onebor frontend deployment...")
     print(f"📦 S3 Bucket: {S3_BUCKET}")
     print(f"🌐 CloudFront Distribution: {CLOUDFRONT_DISTRIBUTION_ID}")
     print(f"🌍 Domain: app.onebor.com")
@@ -139,4 +139,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

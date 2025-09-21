@@ -24,6 +24,23 @@ def get_connection(secrets):
 
 
 def lambda_handler(event, context):
+    # CORS headers for all responses
+    cors_headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "https://app.onebor.com",
+        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Credentials": "true"
+    }
+    
+    # Handle preflight OPTIONS requests
+    if event.get('httpMethod') == 'OPTIONS':
+        return {
+            "statusCode": 200,
+            "headers": cors_headers,
+            "body": ""
+        }
+    
     conn = None
     try:
         body = event.get("body")
@@ -35,42 +52,80 @@ def lambda_handler(event, context):
         user_id = body.get("user_id")
         sub = body.get("sub")  # Cognito user ID
         email = body.get("email")
+        requesting_user_id = body.get(
+            "requesting_user_id")  # User making the request
+        count_only = body.get("count_only", False)  # Default to False
 
         secrets = get_db_secret()
         conn = get_connection(secrets)
 
-        query = "SELECT * FROM users WHERE 1=1"
-        params = []
+        if requesting_user_id:
+            # Apply access control - only show users in shared client groups
+            if count_only:
+                query = """
+                SELECT COUNT(DISTINCT u.user_id) as user_count
+                FROM users u
+                INNER JOIN client_group_users cgu1 ON u.user_id = cgu1.user_id
+                INNER JOIN client_group_users cgu2 ON cgu1.client_group_id = cgu2.client_group_id
+                WHERE cgu2.user_id = %s
+                """
+            else:
+                query = """
+                SELECT DISTINCT u.* 
+                FROM users u
+                INNER JOIN client_group_users cgu1 ON u.user_id = cgu1.user_id
+                INNER JOIN client_group_users cgu2 ON cgu1.client_group_id = cgu2.client_group_id
+                WHERE cgu2.user_id = %s
+                """
+            params = [requesting_user_id]
+        else:
+            # No access control - allow system-level lookups (login/onboarding)
+            if count_only:
+                query = "SELECT COUNT(*) as user_count FROM users WHERE 1=1"
+            else:
+                query = "SELECT * FROM users WHERE 1=1"
+            params = []
 
+        # Add specific filters if provided
         if user_id:
-            query += " AND user_id = %s"
+            query += " AND u.user_id = %s" if requesting_user_id else " AND user_id = %s"
             params.append(user_id)
 
         if sub:
-            query += " AND sub = %s"
+            query += " AND u.sub = %s" if requesting_user_id else " AND sub = %s"
             params.append(sub)
 
         if email:
             if email.endswith("%"):
-                query += " AND email LIKE %s"
+                query += " AND u.email LIKE %s" if requesting_user_id else " AND email LIKE %s"
             else:
-                query += " AND email = %s"
+                query += " AND u.email = %s" if requesting_user_id else " AND email = %s"
             params.append(email)
 
         with conn.cursor() as cursor:
             cursor.execute(query, params)
             rows = cursor.fetchall()
 
-        return {
-            "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps(rows, default=str)
-        }
+            if count_only:
+                # Return just the count as an integer
+                count = rows[0]['user_count'] if rows else 0
+                return {
+                    "statusCode": 200,
+                    "headers": cors_headers,
+                    "body": json.dumps(count)
+                }
+            else:
+                # Return the full user records
+                return {
+                    "statusCode": 200,
+                    "headers": cors_headers,
+                    "body": json.dumps(rows, default=str)
+                }
 
     except Exception as e:
         return {
             "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
+            "headers": cors_headers,
             "body": json.dumps({"error": str(e)})
         }
     finally:

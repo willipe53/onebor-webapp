@@ -1,9 +1,12 @@
 #!/bin/bash
 
-# OneBor Frontend Deployment Script
+# onebor Frontend Deployment Script
 # Deploys the React app to S3 and invalidates CloudFront cache
 
 set -e  # Exit on any error
+
+# Change to project root directory
+cd "$(dirname "$0")/.."
 
 # Configuration
 S3_BUCKET="onebor-app"
@@ -11,7 +14,7 @@ CLOUDFRONT_DISTRIBUTION_ID="E3GH09JUCHC3AZ"
 DIST_PATH="dist"
 AWS_REGION="us-east-1"
 
-echo "🚀 Starting OneBor frontend deployment..."
+echo "🚀 Starting onebor frontend deployment..."
 echo "📦 S3 Bucket: $S3_BUCKET"
 echo "🌐 CloudFront Distribution: $CLOUDFRONT_DISTRIBUTION_ID"
 echo "🌍 Domain: app.onebor.com"
@@ -33,14 +36,28 @@ echo "✅ Prerequisites check passed"
 
 # Build frontend
 echo "🏗️  Building frontend..."
+echo "🔄 Cleaning previous build..."
+rm -rf "$DIST_PATH"
+
 echo "🔄 Installing dependencies..."
-npm install
+if ! npm install; then
+    echo "❌ npm install failed"
+    exit 1
+fi
 
 echo "🔄 Building React app..."
-npm run build
+if ! npm run build; then
+    echo "❌ npm run build failed"
+    exit 1
+fi
 
 if [ ! -d "$DIST_PATH" ]; then
     echo "❌ Build failed: $DIST_PATH directory not found"
+    echo "This could happen if:"
+    echo "  - TypeScript compilation failed"
+    echo "  - Vite build process failed"
+    echo "  - Out of disk space"
+    echo "  - Permission issues"
     exit 1
 fi
 

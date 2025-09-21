@@ -62,7 +62,7 @@ const LandingPage: React.FC = () => {
 
       {/* Main content with centered logo */}
       <MainPage id="mainpage">
-        <LogoImage src={oneborLogo} alt="OneBor Logo" />
+        <LogoImage src={oneborLogo} alt="onebor.ai Logo" />
         <Typography variant="h4" color="text.primary" textAlign="center">
           onebor.ai
         </Typography>

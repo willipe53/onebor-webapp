@@ -14,6 +14,23 @@ def get_connection(s): return pymysql.connect(host=s["DB_HOST"], user=s["DB_USER
 
 
 def lambda_handler(event, context):
+    # CORS headers for all responses
+    cors_headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "https://app.onebor.com",
+        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Credentials": "true"
+    }
+    
+    # Handle preflight OPTIONS requests
+    if event.get('httpMethod') == 'OPTIONS':
+        return {
+            "statusCode": 200,
+            "headers": cors_headers,
+            "body": ""
+        }
+    
     conn = None
     try:
         body = event.get("body")
@@ -67,7 +84,7 @@ def lambda_handler(event, context):
 
             # Require sub and email for updates
             if sub is None or email is None:
-                return {"statusCode": 400, "headers": {"Content-Type": "application/json"},
+                return {"statusCode": 400, "headers": cors_headers,
                         "body": json.dumps({"error": "sub and email are required fields"})}
             updates.append("sub = %s")
             params.append(sub)
@@ -85,7 +102,7 @@ def lambda_handler(event, context):
                 params.append(primary_client_group_id)
 
             if not updates:
-                return {"statusCode": 400, "headers": {"Content-Type": "application/json"},
+                return {"statusCode": 400, "headers": cors_headers,
                         "body": json.dumps({"error": "No fields to update"})}
 
             q = f"UPDATE users SET {', '.join(updates)} WHERE user_id = %s"
@@ -93,7 +110,7 @@ def lambda_handler(event, context):
         else:
             # Insert new user (sub and email are required for new users)
             if not sub or not email:
-                return {"statusCode": 400, "headers": {"Content-Type": "application/json"},
+                return {"statusCode": 400, "headers": cors_headers,
                         "body": json.dumps({"error": "sub and email are required for new users"})}
 
             # With auto-increment user_id, we don't need to generate one
@@ -123,7 +140,7 @@ def lambda_handler(event, context):
                 else:
                     user_id = existing_user_id
 
-                return {"statusCode": 200, "headers": {"Content-Type": "application/json"},
+                return {"statusCode": 200, "headers": cors_headers,
                         "body": json.dumps({"success": True, "user_id": user_id})}
             except pymysql.IntegrityError as ie:
                 # Handle duplicate key or other integrity constraint violations
@@ -131,14 +148,14 @@ def lambda_handler(event, context):
                 if "Duplicate entry" in error_msg and "PRIMARY" in error_msg:
                     # User already exists - this is actually OK for our use case
                     # Just return success with the existing user_id
-                    return {"statusCode": 200, "headers": {"Content-Type": "application/json"},
+                    return {"statusCode": 200, "headers": cors_headers,
                             "body": json.dumps({"success": True, "user_id": user_id, "note": "User already exists"})}
                 else:
                     # Other integrity constraint violations
-                    return {"statusCode": 400, "headers": {"Content-Type": "application/json"},
+                    return {"statusCode": 400, "headers": cors_headers,
                             "body": json.dumps({"error": f"Database constraint violation: {error_msg}"})}
     except Exception as e:
-        return {"statusCode": 500, "headers": {"Content-Type": "application/json"}, "body": json.dumps({"error": str(e)})}
+        return {"statusCode": 500, "headers": cors_headers, "body": json.dumps({"error": str(e)})}
     finally:
         if conn:
             conn.close()

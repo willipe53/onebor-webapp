@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -8,10 +8,9 @@ import {
   Alert,
   CircularProgress,
   Autocomplete,
+  Checkbox,
+  FormControlLabel,
   Grid,
-  ToggleButton,
-  ToggleButtonGroup,
-  Stack,
   Snackbar,
   Chip,
 } from "@mui/material";
@@ -21,7 +20,13 @@ import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import * as apiService from "../services/api";
-import { prettyPrint, isValidEmail, formatDateForInput } from "../utils";
+import FormJsonToggle from "./FormJsonToggle";
+import {
+  prettyPrint,
+  isValidEmail,
+  formatDateForInput,
+  prepareJsonForForm,
+} from "../utils";
 import AceEditor from "react-ace";
 import "ace-builds/src-noconflict/mode-json";
 import "ace-builds/src-noconflict/theme-github";
@@ -52,17 +57,67 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
   const [jsonAttributes, setJsonAttributes] = useState<string>("");
   const [jsonError, setJsonError] = useState<string>("");
   const [showSuccessSnackbar, setShowSuccessSnackbar] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [initialFormState, setInitialFormState] = useState<{
+    name: string;
+    selectedParentEntity: apiService.Entity | null;
+    selectedEntityType: apiService.EntityType | null;
+    dynamicFields: Record<string, any>;
+    jsonAttributes: string;
+  } | null>(null);
 
   const queryClient = useQueryClient();
 
+  // Function to check if form is dirty
+  const checkIfDirty = useCallback(() => {
+    if (!initialFormState) return false;
+
+    const currentState = {
+      name,
+      selectedParentEntity,
+      selectedEntityType,
+      dynamicFields,
+      jsonAttributes,
+    };
+
+    return (
+      currentState.name !== initialFormState.name ||
+      currentState.selectedParentEntity?.entity_id !==
+        initialFormState.selectedParentEntity?.entity_id ||
+      currentState.selectedEntityType?.entity_type_id !==
+        initialFormState.selectedEntityType?.entity_type_id ||
+      JSON.stringify(currentState.dynamicFields) !==
+        JSON.stringify(initialFormState.dynamicFields) ||
+      currentState.jsonAttributes !== initialFormState.jsonAttributes
+    );
+  }, [
+    name,
+    selectedParentEntity,
+    selectedEntityType,
+    dynamicFields,
+    jsonAttributes,
+    initialFormState,
+  ]);
+
+  // Update dirty state whenever form values change
+  useEffect(() => {
+    setIsDirty(checkIfDirty());
+  }, [checkIfDirty]);
+
   // Fetch user data to get primary client group
-  const { data: users } = useQuery({
+  const { data: users, isLoading: usersLoading } = useQuery({
     queryKey: ["users", userId],
     queryFn: () => apiService.queryUsers({ sub: userId! }),
     enabled: !!userId,
   });
 
   const currentUser = users && users.length > 0 ? users[0] : null;
+
+  // Debug logging
+  console.log("🔍 EntityForm - userId:", userId);
+  console.log("🔍 EntityForm - users:", users);
+  console.log("🔍 EntityForm - currentUser:", currentUser);
+  console.log("🔍 EntityForm - usersLoading:", usersLoading);
 
   // Fetch entity types for the dropdown
   const { data: rawEntityTypesData, isLoading: entityTypesLoading } = useQuery({
@@ -77,37 +132,8 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
     enabled: !!currentUser?.user_id,
   });
 
-  // Transform array data to objects if needed
-  const entityTypesData = useMemo(() => {
-    if (!rawEntityTypesData) return [];
-
-    // Check if data is already in object format
-    if (
-      Array.isArray(rawEntityTypesData) &&
-      rawEntityTypesData.length > 0 &&
-      typeof rawEntityTypesData[0] === "object" &&
-      "entity_type_id" in rawEntityTypesData[0]
-    ) {
-      return rawEntityTypesData;
-    }
-
-    // Transform array format [id, name, schema] to object format
-    if (Array.isArray(rawEntityTypesData)) {
-      return rawEntityTypesData.map((row: any) => {
-        if (Array.isArray(row) && row.length >= 3) {
-          return {
-            entity_type_id: row[0],
-            name: row[1],
-            attributes_schema:
-              typeof row[2] === "string" ? JSON.parse(row[2]) : row[2],
-          };
-        }
-        return row;
-      });
-    }
-
-    return rawEntityTypesData;
-  }, [rawEntityTypesData]);
+  // Use entity types data directly since it's an array
+  const entityTypesData = rawEntityTypesData || [];
 
   // Transform entities data for parent dropdown
   const entitiesData = useMemo(() => {
@@ -184,17 +210,64 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
       Object.keys(parsedAttributes).forEach((key) => {
         if (!addedKeys.has(key)) {
           // This field exists in the entity but not in the schema
+          const value = dynamicFields[key] || parsedAttributes[key] || "";
+          const valueType = typeof parsedAttributes[key];
+
+          // Detect type from existing value
+          let fieldType = "string"; // Default
+          if (valueType === "boolean") {
+            fieldType = "boolean";
+          } else if (valueType === "number") {
+            fieldType = Number.isInteger(parsedAttributes[key])
+              ? "integer"
+              : "number";
+          } else if (valueType === "object" && parsedAttributes[key] !== null) {
+            fieldType = Array.isArray(parsedAttributes[key])
+              ? "array"
+              : "object";
+          }
+
           fields.push({
             key,
-            type: "string", // Default type for non-schema fields
+            type: fieldType,
             format: undefined,
             required: false, // Non-schema fields are not required
-            value: dynamicFields[key] || parsedAttributes[key] || "",
+            value,
           });
           addedKeys.add(key);
         }
       });
     }
+
+    // Finally, add any additional fields from dynamicFields (from JSON editing)
+    Object.keys(dynamicFields).forEach((key) => {
+      if (!addedKeys.has(key)) {
+        // This field was added via JSON editing but doesn't exist in schema or original entity
+        const value = dynamicFields[key] || "";
+        const valueType = typeof dynamicFields[key];
+
+        // Detect type from current value
+        let fieldType = "string"; // Default
+        if (valueType === "boolean") {
+          fieldType = "boolean";
+        } else if (valueType === "number") {
+          fieldType = Number.isInteger(dynamicFields[key])
+            ? "integer"
+            : "number";
+        } else if (valueType === "object" && dynamicFields[key] !== null) {
+          fieldType = Array.isArray(dynamicFields[key]) ? "array" : "object";
+        }
+
+        fields.push({
+          key,
+          type: fieldType,
+          format: undefined,
+          required: false,
+          value,
+        });
+        addedKeys.add(key);
+      }
+    });
 
     return fields;
   }, [selectedEntityType, dynamicFields, editingEntity]);
@@ -220,25 +293,50 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
         setSelectedEntityType(entityType || null);
       }
 
-      // Set dynamic fields from attributes - handle both string and object formats
+      // Set dynamic fields from attributes using utility
       if (editingEntity.attributes) {
-        let parsedAttributes;
-        if (typeof editingEntity.attributes === "string") {
-          try {
-            parsedAttributes = JSON.parse(editingEntity.attributes);
-          } catch {
-            parsedAttributes = {};
-          }
-        } else if (typeof editingEntity.attributes === "object") {
-          parsedAttributes = editingEntity.attributes;
-        } else {
-          parsedAttributes = {};
-        }
-
+        const { object: parsedAttributes, jsonString } = prepareJsonForForm(
+          editingEntity.attributes
+        );
         setDynamicFields(parsedAttributes);
-        // Also set JSON string for JSON mode
-        setJsonAttributes(JSON.stringify(parsedAttributes, null, 2));
+        setJsonAttributes(jsonString);
       }
+
+      // Set initial form state for dirty tracking (after all fields are populated)
+      setTimeout(() => {
+        setInitialFormState({
+          name: editingEntity.name || "",
+          selectedParentEntity:
+            editingEntity.parent_entity_id && entitiesData
+              ? entitiesData.find(
+                  (e) => e.entity_id === editingEntity.parent_entity_id
+                ) || null
+              : null,
+          selectedEntityType:
+            editingEntity.entity_type_id && entityTypesData
+              ? entityTypesData.find(
+                  (et) => et.entity_type_id === editingEntity.entity_type_id
+                ) || null
+              : null,
+          dynamicFields: editingEntity.attributes
+            ? prepareJsonForForm(editingEntity.attributes).object
+            : {},
+          jsonAttributes: editingEntity.attributes
+            ? prepareJsonForForm(editingEntity.attributes).jsonString
+            : "",
+        });
+        setIsDirty(false); // Reset dirty state when loading existing entity
+      }, 0);
+    } else {
+      // For new entities, set initial state immediately
+      setInitialFormState({
+        name: "",
+        selectedParentEntity: null,
+        selectedEntityType: null,
+        dynamicFields: {},
+        jsonAttributes: "",
+      });
+      setIsDirty(false);
     }
   }, [editingEntity, entitiesData, entityTypesData]);
 
@@ -308,14 +406,14 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
 
   const mutation = useMutation({
     mutationFn: (data: apiService.UpdateEntityRequest) => {
-      if (editingEntity) {
+      if (editingEntity?.entity_id) {
         return apiService.updateEntity(data);
       } else {
         return apiService.createEntity(data as apiService.CreateEntityRequest);
       }
     },
     onSuccess: () => {
-      if (!editingEntity) {
+      if (!editingEntity?.entity_id) {
         // Reset form only for create mode
         setName("");
         setSelectedParentEntity(null);
@@ -333,8 +431,8 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
       queryClient.invalidateQueries({ queryKey: ["entities"] });
       queryClient.refetchQueries({ queryKey: ["entities"] });
 
-      // Close modal if in edit mode (with a small delay to show the success message)
-      if (editingEntity && onClose) {
+      // Close modal after success (with a small delay to show the success message)
+      if (onClose) {
         setTimeout(() => {
           onClose();
         }, 1000); // 1 second delay to show success message
@@ -342,7 +440,7 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
     },
     onError: (error: any) => {
       console.error(
-        `Entity ${editingEntity ? "update" : "creation"} failed:`,
+        `Entity ${editingEntity?.entity_id ? "update" : "creation"} failed:`,
         error
       );
 
@@ -366,6 +464,12 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Don't submit if user data is still loading
+    if (usersLoading) {
+      console.log("⏳ User data still loading, preventing submission");
+      return;
+    }
 
     // Validate required fields
     const newErrors: Record<string, string> = {};
@@ -416,11 +520,18 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
     };
 
     // Add entity_id for updates
-    if (editingEntity) {
+    if (editingEntity?.entity_id) {
       requestData.entity_id = editingEntity.entity_id;
     } else {
       // For new entities, add client_group_id
+      console.log("🔍 Creating new entity - currentUser:", currentUser);
+      console.log(
+        "🔍 primary_client_group_id:",
+        currentUser?.primary_client_group_id
+      );
+
       if (!currentUser?.primary_client_group_id) {
+        console.log("❌ No primary_client_group_id found");
         setErrors({
           general:
             "No client group assigned. Please contact your administrator.",
@@ -428,6 +539,7 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
         return;
       }
       requestData.client_group_id = currentUser.primary_client_group_id;
+      console.log("✅ Added client_group_id:", requestData.client_group_id);
     }
 
     mutation.mutate(requestData);
@@ -468,7 +580,7 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
       selectedEntityType?.attributes_schema?.properties?.[field.key];
     const label = isSchemaField
       ? `${prettyLabel}${isRequired ? " *" : ""}`
-      : `${prettyLabel} (Legacy)`; // Mark non-schema fields
+      : `${prettyLabel} (Custom)`; // Mark non-schema fields
 
     // Date field
     if (field.type === "string" && field.format === "date") {
@@ -537,6 +649,31 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
       );
     }
 
+    // Boolean field
+    if (field.type === "boolean") {
+      return (
+        <Grid key={field.key}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={Boolean(value)}
+                onChange={(e) =>
+                  handleDynamicFieldChange(field.key, e.target.checked)
+                }
+                disabled={mutation.isPending}
+              />
+            }
+            label={label}
+          />
+          {error && (
+            <Typography variant="caption" color="error" display="block">
+              {error}
+            </Typography>
+          )}
+        </Grid>
+      );
+    }
+
     // Default text field
     return (
       <Grid key={field.key}>
@@ -573,9 +710,9 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
         }}
       >
         <Typography variant="h6">
-          {editingEntity ? "Edit Entity" : "Create Entity"}
+          {editingEntity?.entity_id ? "Edit Entity" : "Create Entity"}
         </Typography>
-        {editingEntity && (
+        {editingEntity?.entity_id && (
           <Chip
             label={`ID: ${editingEntity.entity_id}`}
             size="small"
@@ -592,14 +729,20 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
 
       {mutation.error && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          Failed to {editingEntity ? "update" : "create"} entity:{" "}
+          Failed to {editingEntity?.entity_id ? "update" : "create"} entity:{" "}
           {mutation.error instanceof Error
             ? mutation.error.message
             : "Unknown error"}
         </Alert>
       )}
 
-      {mutation.isSuccess && !editingEntity && (
+      {errors.general && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {errors.general}
+        </Alert>
+      )}
+
+      {mutation.isSuccess && !editingEntity?.entity_id && (
         <Alert severity="success" sx={{ mb: 2 }}>
           Entity created successfully!
         </Alert>
@@ -694,33 +837,11 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
                 {selectedEntityType.name} Properties
               </Typography>
 
-              <Stack direction="row" spacing={1} alignItems="center">
-                <ToggleButtonGroup
-                  value={attributesMode}
-                  exclusive
-                  onChange={handleModeChange}
-                  size="small"
-                  sx={{
-                    "& .MuiToggleButton-root": {
-                      px: 2,
-                      py: 0.5,
-                      fontSize: "0.75rem",
-                      textTransform: "none",
-                      border: "1px solid #e0e0e0",
-                      "&.Mui-selected": {
-                        backgroundColor: "primary.main",
-                        color: "white",
-                        "&:hover": {
-                          backgroundColor: "primary.dark",
-                        },
-                      },
-                    },
-                  }}
-                >
-                  <ToggleButton value="form">Form fields</ToggleButton>
-                  <ToggleButton value="json">JSON</ToggleButton>
-                </ToggleButtonGroup>
-              </Stack>
+              <FormJsonToggle
+                value={attributesMode}
+                onChange={handleModeChange}
+                disabled={mutation.isPending}
+              />
             </Box>
 
             {/* Form fields mode */}
@@ -820,15 +941,20 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
             type="submit"
             variant="contained"
             size="large"
-            disabled={mutation.isPending || !name.trim() || !selectedEntityType}
+            disabled={
+              mutation.isPending ||
+              !name.trim() ||
+              !selectedEntityType ||
+              (editingEntity?.entity_id && !isDirty) // Disable if editing existing entity and not dirty
+            }
           >
             {mutation.isPending ? (
               <>
                 <CircularProgress size={20} sx={{ mr: 1 }} />
                 {editingEntity ? "Updating..." : "Creating..."}
               </>
-            ) : editingEntity ? (
-              "Update Entity"
+            ) : editingEntity?.entity_id ? (
+              `Update ${editingEntity.name}`
             ) : (
               "Create Entity"
             )}

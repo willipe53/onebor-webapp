@@ -26,6 +26,23 @@ def get_connection(secrets):
 
 
 def lambda_handler(event, context):
+    # CORS headers for all responses
+    cors_headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "https://app.onebor.com",
+        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Credentials": "true"
+    }
+    
+    # Handle preflight OPTIONS requests
+    if event.get('httpMethod') == 'OPTIONS':
+        return {
+            "statusCode": 200,
+            "headers": cors_headers,
+            "body": ""
+        }
+    
     conn = None
     try:
         body = event.get("body")
@@ -38,11 +55,12 @@ def lambda_handler(event, context):
         expires_at = body.get("expires_at")
         client_group_id = body.get("client_group_id")
         code = body.get("code")  # For get and redeem actions
+        count_only = body.get("count_only", False)  # Default to False
 
         if not action:
             return {
                 "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
+                "headers": cors_headers,
                 "body": json.dumps({"error": "action is required"})
             }
 
@@ -55,11 +73,15 @@ def lambda_handler(event, context):
                 if not client_group_id and not code:
                     return {
                         "statusCode": 400,
-                        "headers": {"Content-Type": "application/json"},
+                        "headers": cors_headers,
                         "body": json.dumps({"error": "client_group_id or code is required for get action"})
                     }
 
-                query = "SELECT * FROM invitations WHERE 1=1"
+                if count_only:
+                    query = "SELECT COUNT(*) as invitation_count FROM invitations WHERE 1=1"
+                else:
+                    query = "SELECT * FROM invitations WHERE 1=1"
+
                 params = []
 
                 if client_group_id:
@@ -73,18 +95,28 @@ def lambda_handler(event, context):
                 cursor.execute(query, params)
                 rows = cursor.fetchall()
 
-                return {
-                    "statusCode": 200,
-                    "headers": {"Content-Type": "application/json"},
-                    "body": json.dumps(rows, default=str)
-                }
+                if count_only:
+                    # Return just the count as an integer
+                    count = rows[0]['invitation_count'] if rows else 0
+                    return {
+                        "statusCode": 200,
+                        "headers": cors_headers,
+                        "body": json.dumps(count)
+                    }
+                else:
+                    # Return the full invitation records
+                    return {
+                        "statusCode": 200,
+                        "headers": cors_headers,
+                        "body": json.dumps(rows, default=str)
+                    }
 
             elif action == "create":
                 # Create new invitation
                 if not expires_at or not client_group_id:
                     return {
                         "statusCode": 400,
-                        "headers": {"Content-Type": "application/json"},
+                        "headers": cors_headers,
                         "body": json.dumps({"error": "expires_at and client_group_id are required for create action"})
                     }
 
@@ -97,7 +129,7 @@ def lambda_handler(event, context):
                 except ValueError:
                     return {
                         "statusCode": 400,
-                        "headers": {"Content-Type": "application/json"},
+                        "headers": cors_headers,
                         "body": json.dumps({"error": "expires_at must be a valid ISO datetime string"})
                     }
 
@@ -120,7 +152,7 @@ def lambda_handler(event, context):
 
                 return {
                     "statusCode": 200,
-                    "headers": {"Content-Type": "application/json"},
+                    "headers": cors_headers,
                     "body": json.dumps({
                         "success": True,
                         "invitation_id": invitation_id,
@@ -133,35 +165,38 @@ def lambda_handler(event, context):
                 if not code:
                     return {
                         "statusCode": 400,
-                        "headers": {"Content-Type": "application/json"},
+                        "headers": cors_headers,
                         "body": json.dumps({"error": "code is required for redeem action"})
                     }
 
-                # Check if invitation exists and is not already expired
+                # Check if invitation exists (regardless of expiration status)
                 cursor.execute("""
                     SELECT * FROM invitations 
-                    WHERE code = %s AND expires_at > NOW()
+                    WHERE code = %s
                 """, (code,))
                 invitation = cursor.fetchone()
 
                 if not invitation:
                     return {
                         "statusCode": 404,
-                        "headers": {"Content-Type": "application/json"},
-                        "body": json.dumps({"error": "Invalid or expired invitation code"})
+                        "headers": cors_headers,
+                        "body": json.dumps({"error": "Invitation code not found"})
                     }
 
-                # Mark as redeemed by setting expires_at to now
+                # Mark as redeemed by setting expires_at to now (UTC)
                 cursor.execute("""
                     UPDATE invitations 
-                    SET expires_at = NOW() 
+                    SET expires_at = UTC_TIMESTAMP() 
                     WHERE code = %s
                 """, (code,))
+                rows_affected = cursor.rowcount
                 conn.commit()
+
+                print(f"DEBUG: Updated {rows_affected} rows for code {code}")
 
                 return {
                     "statusCode": 200,
-                    "headers": {"Content-Type": "application/json"},
+                    "headers": cors_headers,
                     "body": json.dumps({
                         "success": True,
                         "invitation_id": invitation['invitation_id'],
@@ -172,14 +207,14 @@ def lambda_handler(event, context):
             else:
                 return {
                     "statusCode": 400,
-                    "headers": {"Content-Type": "application/json"},
+                    "headers": cors_headers,
                     "body": json.dumps({"error": "Invalid action. Must be 'get', 'create', or 'redeem'"})
                 }
 
     except Exception as e:
         return {
             "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
+            "headers": cors_headers,
             "body": json.dumps({"error": str(e)})
         }
     finally:

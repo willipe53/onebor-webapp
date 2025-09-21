@@ -1,4 +1,4 @@
-# OneBor Web App
+# onebor Web App
 
 The asset allocators toolkit - A React + TypeScript + Vite application with AWS Cognito authentication.
 
@@ -9,7 +9,7 @@ The asset allocators toolkit - A React + TypeScript + Vite application with AWS 
 - Forgot password functionality
 - Show/hide password toggles
 - Responsive Material-UI design
-- OneBor logo integration
+- onebor logo integration
 
 ## Tech Stack
 
@@ -22,11 +22,13 @@ The asset allocators toolkit - A React + TypeScript + Vite application with AWS 
 ## Getting Started
 
 1. Install dependencies:
+
    ```bash
    npm install
    ```
 
 2. Start the development server:
+
    ```bash
    npm run dev
    ```

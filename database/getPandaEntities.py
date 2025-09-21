@@ -24,6 +24,23 @@ def get_connection(secrets):
 
 
 def lambda_handler(event, context):
+    # CORS headers for all responses
+    cors_headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "https://app.onebor.com",
+        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Credentials": "true"
+    }
+    
+    # Handle preflight OPTIONS requests
+    if event.get('httpMethod') == 'OPTIONS':
+        return {
+            "statusCode": 200,
+            "headers": cors_headers,
+            "body": ""
+        }
+    
     conn = None
     try:
         # Parse incoming request body
@@ -38,7 +55,7 @@ def lambda_handler(event, context):
         if not user_id:
             return {
                 "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
+                "headers": cors_headers,
                 "body": json.dumps({"error": "user_id is required for data protection"})
             }
 
@@ -48,17 +65,27 @@ def lambda_handler(event, context):
         name = body.get("name")
         entity_type_id = body.get("entity_type_id")
         parent_entity_id = body.get("parent_entity_id")
+        client_group_id = body.get("client_group_id")
+        count_only = body.get("count_only", False)  # Default to False
 
         secrets = get_db_secret()
         conn = get_connection(secrets)
 
         # Base query with security filtering - only show entities the user has access to
-        query = """
-            SELECT DISTINCT e.* FROM entities e
-            JOIN client_group_entities cge ON e.entity_id = cge.entity_id
-            JOIN client_group_users cgu ON cge.client_group_id = cgu.client_group_id
-            WHERE cgu.user_id = %s
-        """
+        if count_only:
+            query = """
+                SELECT COUNT(DISTINCT e.entity_id) as entity_count FROM entities e
+                JOIN client_group_entities cge ON e.entity_id = cge.entity_id
+                JOIN client_group_users cgu ON cge.client_group_id = cgu.client_group_id
+                WHERE cgu.user_id = %s
+            """
+        else:
+            query = """
+                SELECT DISTINCT e.* FROM entities e
+                JOIN client_group_entities cge ON e.entity_id = cge.entity_id
+                JOIN client_group_users cgu ON cge.client_group_id = cgu.client_group_id
+                WHERE cgu.user_id = %s
+            """
         params = [user_id]
 
         print(f"DEBUG: Executing query with user_id: {user_id}")
@@ -66,6 +93,10 @@ def lambda_handler(event, context):
         print(f"DEBUG: Params: {params}")
 
         # Add additional filters
+        if client_group_id:
+            query += " AND cge.client_group_id = %s"
+            params.append(client_group_id)
+
         if entity_id:
             query += " AND e.entity_id = %s"
             params.append(entity_id)
@@ -90,23 +121,36 @@ def lambda_handler(event, context):
             try:
                 cursor.execute(query, params)
                 rows = cursor.fetchall()
-                print(
-                    f"DEBUG: Query executed successfully, returned {len(rows)} rows")
+
+                if count_only:
+                    # Return just the count as an integer
+                    count = rows[0]['entity_count'] if rows else 0
+                    print(
+                        f"DEBUG: Count query executed successfully, returned count: {count}")
+                    return {
+                        "statusCode": 200,
+                        "headers": cors_headers,
+                        "body": json.dumps(count)
+                    }
+                else:
+                    # Return the full entity records
+                    print(
+                        f"DEBUG: Query executed successfully, returned {len(rows)} rows")
+                    return {
+                        "statusCode": 200,
+                        "headers": cors_headers,
+                        # default=str for datetime compatibility
+                        "body": json.dumps(rows, default=str)
+                    }
+
             except Exception as query_error:
                 print(f"DEBUG: Query execution failed: {str(query_error)}")
                 raise query_error
 
-        return {
-            "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
-            # default=str for datetime compatibility
-            "body": json.dumps(rows, default=str)
-        }
-
     except Exception as e:
         return {
             "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
+            "headers": cors_headers,
             "body": json.dumps({"error": str(e)})
         }
     finally:

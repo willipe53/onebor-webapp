@@ -378,6 +378,65 @@ def ensure_permission_for_apig(fn_name: str, path_part: str, http_method: str):
             raise
 
 
+def ensure_options_method(api_id: str, resource_id: str):
+    """Ensure OPTIONS method exists for CORS preflight"""
+    if method_exists(api_id, resource_id, "OPTIONS"):
+        status_print("OPTIONS method already exists", "info")
+        return
+
+    status_print("Creating OPTIONS method for CORS", "success")
+
+    # Create OPTIONS method without authorization
+    apigw_client.put_method(
+        restApiId=api_id,
+        resourceId=resource_id,
+        httpMethod="OPTIONS",
+        authorizationType="NONE",
+    )
+
+    # Create mock integration for OPTIONS
+    apigw_client.put_integration(
+        restApiId=api_id,
+        resourceId=resource_id,
+        httpMethod="OPTIONS",
+        type="MOCK",
+        requestTemplates={
+            "application/json": '{"statusCode": 200}'
+        }
+    )
+
+    # Set up method response for OPTIONS
+    apigw_client.put_method_response(
+        restApiId=api_id,
+        resourceId=resource_id,
+        httpMethod="OPTIONS",
+        statusCode="200",
+        responseParameters={
+            "method.response.header.Access-Control-Allow-Headers": False,
+            "method.response.header.Access-Control-Allow-Methods": False,
+            "method.response.header.Access-Control-Allow-Origin": False,
+            "method.response.header.Access-Control-Allow-Credentials": False,
+        }
+    )
+
+    # Set up integration response for OPTIONS
+    apigw_client.put_integration_response(
+        restApiId=api_id,
+        resourceId=resource_id,
+        httpMethod="OPTIONS",
+        statusCode="200",
+        responseParameters={
+            "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+            "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+            "method.response.header.Access-Control-Allow-Origin": "'https://app.onebor.com'",
+            "method.response.header.Access-Control-Allow-Credentials": "'true'",
+        },
+        responseTemplates={
+            "application/json": ""
+        }
+    )
+
+
 def deploy_stage(api_id: str, stage_name: str):
     """Deploy API Gateway stage"""
     status_print(f"Deploying API stage {stage_name}", "success")
@@ -455,9 +514,15 @@ def main():
     try:
         root_id = get_root_resource_id(REST_API_ID)
         res_id = ensure_resource(REST_API_ID, root_id, path_part)
+
+        # Set up POST method
         ensure_method(REST_API_ID, res_id, "POST")
         ensure_integration(REST_API_ID, res_id, "POST", fn_arn)
         ensure_permission_for_apig(fn_name, path_part, "POST")
+
+        # Set up OPTIONS method for CORS preflight
+        ensure_options_method(REST_API_ID, res_id)
+
     except ClientError as e:
         status_print(f"Error setting up API Gateway: {e}", "error")
         sys.exit(1)

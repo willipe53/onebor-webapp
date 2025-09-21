@@ -9,20 +9,37 @@ import {
   MenuItem,
   Chip,
   Modal,
+  Autocomplete,
+  Tooltip,
+  IconButton,
+  Checkbox,
 } from "@mui/material";
+import { Add, InfoOutlined } from "@mui/icons-material";
 import { DataGrid } from "@mui/x-data-grid";
 import type {
   GridColDef,
   GridRenderCellParams,
   GridRowParams,
 } from "@mui/x-data-grid";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import * as apiService from "../services/api";
 import EntityForm from "./EntityForm";
 
-const EntitiesTable: React.FC = () => {
+interface EntitiesTableProps {
+  groupSelectionMode?: {
+    clientGroupId: number;
+    clientGroupName: string;
+    onFinish: (selectedEntityIds: number[]) => void;
+    onCancel: () => void;
+  };
+}
+
+const EntitiesTable: React.FC<EntitiesTableProps> = ({
+  groupSelectionMode,
+}) => {
   const { userId } = useAuth();
+  const queryClient = useQueryClient();
 
   // Get current user's database ID
   const { data: currentUser } = useQuery({
@@ -30,6 +47,17 @@ const EntitiesTable: React.FC = () => {
     queryFn: () => apiService.queryUsers({ sub: userId! }),
     enabled: !!userId,
     select: (data) => data[0], // Get first user from array
+  });
+
+  // Get primary client group details
+  const { data: primaryClientGroup } = useQuery({
+    queryKey: ["primary-client-group", currentUser?.primary_client_group_id],
+    queryFn: () =>
+      apiService.queryClientGroups({
+        client_group_id: currentUser!.primary_client_group_id!,
+      }),
+    enabled: !!currentUser?.primary_client_group_id,
+    select: (data) => data[0],
   });
 
   const [filters, setFilters] = useState<
@@ -41,6 +69,14 @@ const EntitiesTable: React.FC = () => {
   const [parentEntityFilter, setParentEntityFilter] = useState("");
   const [editingEntity, setEditingEntity] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Group selection mode state
+  const [selectedEntityIds, setSelectedEntityIds] = useState<Set<number>>(
+    new Set()
+  );
+  const [currentGroupEntityIds, setCurrentGroupEntityIds] = useState<
+    Set<number>
+  >(new Set());
 
   // Fetch entities
   const {
@@ -54,6 +90,30 @@ const EntitiesTable: React.FC = () => {
       apiService.queryEntities({ ...filters, user_id: currentUser!.user_id }),
     enabled: !!currentUser?.user_id, // Only run query when user data is loaded
   });
+
+  // Fetch current group entities (only in group selection mode)
+  const { data: groupEntityIds } = useQuery({
+    queryKey: [
+      "client-group-entities",
+      groupSelectionMode?.clientGroupId,
+      currentUser?.user_id,
+    ],
+    queryFn: () =>
+      apiService.queryClientGroupEntities({
+        client_group_id: groupSelectionMode!.clientGroupId,
+        user_id: currentUser!.user_id,
+      }),
+    enabled: !!groupSelectionMode?.clientGroupId && !!currentUser?.user_id,
+  });
+
+  // Update current group entity IDs when data changes
+  React.useEffect(() => {
+    if (groupEntityIds && groupSelectionMode) {
+      const newSet = new Set(groupEntityIds);
+      setCurrentGroupEntityIds(newSet);
+      setSelectedEntityIds(new Set(newSet)); // Initialize selection with current group entities
+    }
+  }, [groupEntityIds, groupSelectionMode]);
 
   // Transform array data to objects if needed
   const entitiesData = React.useMemo(() => {
@@ -94,39 +154,60 @@ const EntitiesTable: React.FC = () => {
     queryFn: () => apiService.queryEntityTypes({}),
   });
 
-  // Transform entity types data for dropdown
-  const entityTypesData = React.useMemo(() => {
-    if (!rawEntityTypesData) return [];
+  // Use entity types data directly since it's an array
+  const entityTypesData = rawEntityTypesData || [];
 
-    // Check if data is already in object format
-    if (
-      Array.isArray(rawEntityTypesData) &&
-      rawEntityTypesData.length > 0 &&
-      typeof rawEntityTypesData[0] === "object" &&
-      "entity_type_id" in rawEntityTypesData[0]
-    ) {
-      return rawEntityTypesData;
-    }
+  // Checkbox handlers for group selection mode
+  const handleEntityToggle = React.useCallback(
+    (entityId: number) => {
+      if (!groupSelectionMode) return;
 
-    // Transform array format [id, name, schema, short_label, label_color] to object format
-    if (Array.isArray(rawEntityTypesData)) {
-      return rawEntityTypesData.map((row: any) => {
-        if (Array.isArray(row) && row.length >= 3) {
-          return {
-            entity_type_id: row[0],
-            name: row[1],
-            attributes_schema:
-              typeof row[2] === "string" ? JSON.parse(row[2]) : row[2],
-            short_label: row[3] || null,
-            label_color: row[4] || null,
-          };
+      setSelectedEntityIds((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.has(entityId)) {
+          newSet.delete(entityId);
+        } else {
+          newSet.add(entityId);
         }
-        return row;
+        return newSet;
       });
-    }
+    },
+    [groupSelectionMode]
+  );
 
-    return rawEntityTypesData;
-  }, [rawEntityTypesData]);
+  const handleSelectAllVisible = React.useCallback(() => {
+    if (!groupSelectionMode || !entitiesData) return;
+
+    const visibleEntityIds = entitiesData.map((entity) => entity.entity_id);
+    const allVisibleSelected = visibleEntityIds.every((id) =>
+      selectedEntityIds.has(id)
+    );
+
+    setSelectedEntityIds((prev) => {
+      const newSet = new Set(prev);
+      if (allVisibleSelected) {
+        // Deselect all visible
+        visibleEntityIds.forEach((id) => newSet.delete(id));
+      } else {
+        // Select all visible
+        visibleEntityIds.forEach((id) => newSet.add(id));
+      }
+      return newSet;
+    });
+  }, [groupSelectionMode, entitiesData, selectedEntityIds]);
+
+  // Create list of unique entity names for autocomplete
+  const uniqueEntityNames = useMemo(() => {
+    if (!entitiesData) return [];
+
+    const names = entitiesData
+      .map((entity) => entity.name)
+      .filter((name) => name && name.trim()) // Remove empty/null names
+      .sort();
+
+    // Remove duplicates and return as array of strings
+    return [...new Set(names)];
+  }, [entitiesData]);
 
   const formatAttributes = (attributes: any) => {
     if (!attributes) return "None";
@@ -181,6 +262,44 @@ const EntitiesTable: React.FC = () => {
   // Define DataGrid columns
   const columns: GridColDef[] = useMemo(
     () => [
+      // Checkbox column (only in group selection mode)
+      ...(groupSelectionMode
+        ? [
+            {
+              field: "selected",
+              headerName: "",
+              width: 80,
+              sortable: false,
+              filterable: false,
+              renderHeader: () => {
+                const visibleEntityIds =
+                  entitiesData?.map((entity) => entity.entity_id) || [];
+                const allVisibleSelected =
+                  visibleEntityIds.length > 0 &&
+                  visibleEntityIds.every((id) => selectedEntityIds.has(id));
+                const someVisibleSelected = visibleEntityIds.some((id) =>
+                  selectedEntityIds.has(id)
+                );
+
+                return (
+                  <Checkbox
+                    checked={allVisibleSelected}
+                    indeterminate={someVisibleSelected && !allVisibleSelected}
+                    onChange={handleSelectAllVisible}
+                    size="small"
+                  />
+                );
+              },
+              renderCell: (params: GridRenderCellParams) => (
+                <Checkbox
+                  checked={selectedEntityIds.has(params.row.entity_id)}
+                  onChange={() => handleEntityToggle(params.row.entity_id)}
+                  size="small"
+                />
+              ),
+            },
+          ]
+        : []),
       {
         field: "entity_id",
         headerName: "ID",
@@ -305,7 +424,14 @@ const EntitiesTable: React.FC = () => {
         ),
       },
     ],
-    [entityTypesData, entitiesData]
+    [
+      entityTypesData,
+      entitiesData,
+      groupSelectionMode,
+      selectedEntityIds,
+      handleSelectAllVisible,
+      handleEntityToggle,
+    ]
   );
 
   if (isLoading) {
@@ -368,11 +494,116 @@ const EntitiesTable: React.FC = () => {
     setEditingEntity(null);
   };
 
+  const handleFinishEditing = async () => {
+    if (!groupSelectionMode) return;
+
+    // Get the complete desired state (all selected entity IDs)
+    const desiredEntityIds = Array.from(selectedEntityIds);
+
+    console.log(
+      "🔄 Finishing entity group editing - desired entities:",
+      desiredEntityIds,
+      "current entities:",
+      Array.from(currentGroupEntityIds)
+    );
+
+    try {
+      // Send the complete desired state to the backend
+      const result = await apiService.modifyClientGroupEntities({
+        client_group_id: groupSelectionMode.clientGroupId,
+        entity_ids: desiredEntityIds,
+      });
+
+      console.log("✅ Entity group modification successful:", result);
+      console.log(
+        `📊 Added ${result.added_count}, removed ${result.removed_count} entities`
+      );
+
+      // Invalidate relevant caches to ensure UI reflects the changes
+      queryClient.invalidateQueries({
+        queryKey: ["client-group-entities", groupSelectionMode.clientGroupId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["entities"],
+      });
+
+      groupSelectionMode.onFinish(desiredEntityIds);
+    } catch (error) {
+      console.error("❌ Entity group modification failed:", error);
+      // Could add error handling here
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h5" gutterBottom>
-        Entities
-      </Typography>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+        <Typography variant="h5">
+          {groupSelectionMode
+            ? `Entities for ${groupSelectionMode.clientGroupName} (${selectedEntityIds.size} selected)`
+            : "Entities"}
+        </Typography>
+        <Tooltip
+          title={
+            groupSelectionMode
+              ? "Use the checkboxes to select entities that should belong to this client group."
+              : "The Entity is the fundamental building block of the app. All of your accounts, portfolios, and holdings are entities, which have a parent-child relationship. For example, an account could contain multiple holdings, and one of those holdings could be a portfolio which contained a fund which contained multiple equities."
+          }
+          placement="right"
+          arrow
+        >
+          <IconButton size="small" sx={{ color: "text.secondary" }}>
+            <InfoOutlined fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        {groupSelectionMode ? (
+          <>
+            <Button
+              variant="contained"
+              color="primary"
+              size="small"
+              onClick={handleFinishEditing}
+              sx={{
+                borderRadius: "20px",
+                textTransform: "none",
+                fontWeight: 600,
+              }}
+            >
+              Finished Editing
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              size="small"
+              onClick={groupSelectionMode.onCancel}
+              sx={{
+                borderRadius: "20px",
+                textTransform: "none",
+                fontWeight: 600,
+              }}
+            >
+              Cancel Edits
+            </Button>
+          </>
+        ) : (
+          <Button
+            variant="contained"
+            color="success"
+            size="small"
+            startIcon={<Add />}
+            onClick={() => {
+              setEditingEntity({}); // Set empty object for new entity
+              setIsModalOpen(true);
+            }}
+            sx={{
+              borderRadius: "20px",
+              textTransform: "none",
+              fontWeight: 600,
+            }}
+          >
+            New
+          </Button>
+        )}
+      </Box>
 
       {/* Filters */}
       <Box sx={{ mb: 3, p: 2, border: "1px solid #ddd", borderRadius: 1 }}>
@@ -388,12 +619,19 @@ const EntitiesTable: React.FC = () => {
               size="small"
               sx={{ minWidth: 120 }}
             />
-            <TextField
-              label="Name"
+            <Autocomplete
+              freeSolo
+              options={uniqueEntityNames}
               value={nameFilter}
-              onChange={(e) => setNameFilter(e.target.value)}
-              size="small"
-              sx={{ minWidth: 200 }}
+              onInputChange={(_, newValue) => setNameFilter(newValue || "")}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Name"
+                  size="small"
+                  sx={{ minWidth: 200 }}
+                />
+              )}
             />
           </Stack>
           <Stack direction="row" spacing={2}>
@@ -436,38 +674,52 @@ const EntitiesTable: React.FC = () => {
 
       {/* Data Grid */}
       <Box sx={{ height: 600, width: "100%" }}>
-        <DataGrid
-          rows={entitiesData || []}
-          columns={columns}
-          getRowId={(row) => row.entity_id}
-          pagination
-          pageSizeOptions={[25, 50, 100]}
-          initialState={{
-            pagination: {
-              paginationModel: { pageSize: 25 },
-            },
-          }}
-          disableRowSelectionOnClick
-          onRowClick={handleRowClick}
-          getRowHeight={() => "auto"}
-          sx={{
-            "& .MuiDataGrid-cell": {
-              fontSize: "0.875rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-start",
-            },
-            "& .MuiDataGrid-columnHeaders": {
-              backgroundColor: "rgba(25, 118, 210, 0.15) !important", // Slightly more visible blue
-              borderBottom: "1px solid rgba(25, 118, 210, 0.2) !important",
-            },
-            "& .MuiDataGrid-columnHeader": {
-              backgroundColor: "rgba(25, 118, 210, 0.15) !important",
-              display: "flex",
-              alignItems: "center",
-            },
-          }}
-        />
+        {entitiesData.length === 0 && !isLoading ? (
+          <Box sx={{ p: 4, textAlign: "center" }}>
+            <Typography variant="body2" color="text.secondary">
+              No entities found
+              <br />
+              No entities exist for{" "}
+              {primaryClientGroup?.name || "this client group"}
+              <br />
+              Click "New" to create one for{" "}
+              {primaryClientGroup?.name || "this client group"}.
+            </Typography>
+          </Box>
+        ) : (
+          <DataGrid
+            rows={entitiesData || []}
+            columns={columns}
+            getRowId={(row) => row.entity_id}
+            pagination
+            pageSizeOptions={[25, 50, 100]}
+            initialState={{
+              pagination: {
+                paginationModel: { pageSize: 25 },
+              },
+            }}
+            disableRowSelectionOnClick
+            onRowClick={groupSelectionMode ? undefined : handleRowClick}
+            getRowHeight={() => "auto"}
+            sx={{
+              "& .MuiDataGrid-cell": {
+                fontSize: "0.875rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-start",
+              },
+              "& .MuiDataGrid-columnHeaders": {
+                backgroundColor: "rgba(25, 118, 210, 0.15) !important", // Slightly more visible blue
+                borderBottom: "1px solid rgba(25, 118, 210, 0.2) !important",
+              },
+              "& .MuiDataGrid-columnHeader": {
+                backgroundColor: "rgba(25, 118, 210, 0.15) !important",
+                display: "flex",
+                alignItems: "center",
+              },
+            }}
+          />
+        )}
       </Box>
 
       {/* Edit Modal */}
@@ -493,12 +745,10 @@ const EntitiesTable: React.FC = () => {
             p: 0,
           }}
         >
-          {editingEntity && (
-            <EntityForm
-              editingEntity={editingEntity}
-              onClose={handleCloseModal}
-            />
-          )}
+          <EntityForm
+            editingEntity={editingEntity}
+            onClose={handleCloseModal}
+          />
         </Box>
       </Modal>
     </Box>

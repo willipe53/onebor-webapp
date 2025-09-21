@@ -1,6 +1,6 @@
-# OneBor Frontend Deployment
+# onebor Frontend Deployment
 
-This directory contains scripts for deploying the OneBor React frontend to AWS S3 with CloudFront distribution.
+This directory contains scripts for deploying the onebor React frontend to AWS S3 with CloudFront distribution.
 
 ## Prerequisites
 
@@ -117,4 +117,3 @@ If you need to rollback to a previous version:
 - **CloudFront Metrics**: Check AWS CloudWatch for distribution metrics
 - **S3 Access Logs**: Enable S3 access logging if needed
 - **Application Logs**: Check browser console for client-side errors
-

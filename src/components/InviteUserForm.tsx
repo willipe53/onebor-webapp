@@ -68,9 +68,7 @@ export const InviteUserForm: React.FC<InviteUserFormProps> = ({
   });
 
   // Fetch client groups for the dropdown (only groups the user is a member of)
-  const { data: membershipGroups = [], error: clientGroupsError } = useQuery<
-    ClientGroup[]
-  >({
+  const { data: membershipGroups = [] } = useQuery<ClientGroup[]>({
     queryKey: ["clientGroups", currentUser?.user_id],
     queryFn: async () => {
       console.log(
@@ -114,14 +112,6 @@ export const InviteUserForm: React.FC<InviteUserFormProps> = ({
     }
     return groups;
   }, [membershipGroups, primaryGroup]);
-
-  // Log client groups data for debugging
-  console.log(
-    "🔍 InviteUserForm - Final client groups:",
-    clientGroups,
-    "Error:",
-    clientGroupsError
-  );
 
   // Check if email is already a member of selected client group
   const { refetch: checkExistingUser } = useQuery({
@@ -261,8 +251,8 @@ export const InviteUserForm: React.FC<InviteUserFormProps> = ({
     );
     const expiresAtFormatted = formData.expiresAt!.toLocaleString();
 
-    const subject = `Invitation to join ${selectedClientGroup?.name} on OneBor`;
-    const body = `You have been invited to join "${selectedClientGroup?.name}" on OneBor.
+    const subject = `Invitation to join ${selectedClientGroup?.name} on onebor.ai`;
+    const body = `You have been invited to join "${selectedClientGroup?.name}" on onebor.ai.
 
 This invitation will expire at ${expiresAtFormatted}.
 
@@ -271,7 +261,7 @@ https://onebor.com/accept_invitation/${invitationCode}
 
 Alternatively, you can manually enter this invitation code: ${invitationCode}
 
-If you have any questions, please contact the person at your firm who administers OneBor.`;
+If you have any questions, please contact the person at your firm who administers onebor.ai.`;
 
     const mailtoUrl = `mailto:${formData.email}?subject=${encodeURIComponent(
       subject

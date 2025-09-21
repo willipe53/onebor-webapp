@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Comprehensive tests for Valid Entities API.
 Tests follow the pattern: setup -> validate -> cleanup
@@ -13,18 +14,15 @@ class TestValidEntities(BaseAPITest):
     def test_get_valid_entities_by_client_group(self):
         """Test getting valid entities filtered by client_group_id."""
         # Create test entity type and entity
-        test_type_name = self.generate_test_name("VALID_ENTITY_TYPE")
         test_schema = {"valid_field": {"type": "string"}}
         type_result = self.create_entity_type(test_type_name, test_schema)
         entity_type_id = type_result['entity_type_id']
 
-        test_entity_name = self.generate_test_name("VALID_ENTITY")
         entity_result = self.create_entity(test_entity_name, entity_type_id,
                                            attributes={"valid_field": "test_value"})
         entity_id = entity_result['entity_id']
 
         # Create test client group
-        test_group_name = self.generate_test_name("VALID_GROUP")
         group_result = self.create_client_group(test_group_name)
         group_id = group_result['id']
 
@@ -55,10 +53,7 @@ class TestValidEntities(BaseAPITest):
     def test_get_valid_entities_by_user(self):
         """Test getting valid entities filtered by user_id."""
         # Create test user
-        test_user_id = f"valid_user_{self.get_test_timestamp()}"
-        test_email = f"valid_{self.get_test_timestamp()}@example.com"
-        test_name = self.generate_test_name("VALID_USER")
-        self.create_user(test_user_id, test_email, test_name)
+        test_user_id = self.test_user_id
 
         # Test 1: Get valid entities for the user
         valid_entities = self.get_valid_entities(user_id=test_user_id)
@@ -74,12 +69,8 @@ class TestValidEntities(BaseAPITest):
     def test_get_valid_entities_by_both_filters(self):
         """Test getting valid entities filtered by both client_group_id and user_id."""
         # Create test user and client group
-        test_user_id = f"both_user_{self.get_test_timestamp()}"
-        test_email = f"both_{self.get_test_timestamp()}@example.com"
-        test_name = self.generate_test_name("BOTH_USER")
-        self.create_user(test_user_id, test_email, test_name)
+        test_user_id = self.test_user_id
 
-        test_group_name = self.generate_test_name("BOTH_GROUP")
         group_result = self.create_client_group(test_group_name)
         group_id = group_result['id']
 
@@ -149,7 +140,6 @@ class TestValidEntities(BaseAPITest):
     def test_valid_entities_with_complex_setup(self):
         """Test valid entities with a complex setup of groups, users, and entities."""
         # Create entity type
-        test_type_name = self.generate_test_name("COMPLEX_TYPE")
         test_schema = {"category": {"type": "string"}}
         type_result = self.create_entity_type(test_type_name, test_schema)
         entity_type_id = type_result['entity_type_id']
@@ -157,7 +147,6 @@ class TestValidEntities(BaseAPITest):
         # Create multiple entities
         test_entities = []
         for i in range(3):
-            entity_name = self.generate_test_name(f"COMPLEX_ENTITY_{i}")
             entity_result = self.create_entity(entity_name, entity_type_id,
                                                attributes={"category": f"category_{i}"})
             test_entities.append(entity_result['entity_id'])
@@ -165,17 +154,13 @@ class TestValidEntities(BaseAPITest):
         # Create multiple client groups
         test_groups = []
         for i in range(2):
-            group_name = self.generate_test_name(f"COMPLEX_GROUP_{i}")
             group_result = self.create_client_group(group_name)
             test_groups.append(group_result['id'])
 
         # Create multiple users
         test_users = []
         for i in range(2):
-            user_id = f"complex_user_{i}_{self.get_test_timestamp()}"
-            email = f"complex_{i}_{self.get_test_timestamp()}@example.com"
-            name = self.generate_test_name(f"COMPLEX_USER_{i}")
-            self.create_user(user_id, email, name)
+            user_id = self.test_user_id
             test_users.append(user_id)
 
         # Associate users with groups
@@ -214,14 +199,10 @@ class TestValidEntities(BaseAPITest):
     def test_valid_entities_response_consistency(self):
         """Test that valid entities API returns consistent response format."""
         # Create minimal test setup
-        test_group_name = self.generate_test_name("CONSISTENCY_GROUP")
         group_result = self.create_client_group(test_group_name)
         group_id = group_result['id']
 
-        test_user_id = f"consistency_user_{self.get_test_timestamp()}"
-        test_email = f"consistency_{self.get_test_timestamp()}@example.com"
-        test_name = self.generate_test_name("CONSISTENCY_USER")
-        self.create_user(test_user_id, test_email, test_name)
+        test_user_id = self.test_user_id
 
         # Test 1: Group filter response format
         group_entities = self.get_valid_entities(client_group_id=group_id)

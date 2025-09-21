@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Comprehensive tests for Entity Type APIs.
 Tests follow the pattern: modify -> validate -> revert -> validate -> cleanup
@@ -115,7 +116,6 @@ class TestEntityTypes(BaseAPITest):
     @pytest.mark.integration
     def test_entity_type_create_with_new_fields(self):
         """Test creating a new entity type with short_label and label_color fields."""
-        test_name = self.generate_test_name("NEW_FIELDS_TEST")
         test_schema = {
             "type": "object",
             "properties": {
@@ -314,7 +314,6 @@ class TestEntityTypes(BaseAPITest):
     @pytest.mark.integration
     def test_entity_type_create_and_delete_cycle(self):
         """Test creating a new entity type and then deleting it."""
-        test_name = self.generate_test_name("ENTITY_TYPE")
         test_schema = {
             "name": {"type": "string", "required": True},
             "description": {"type": "string", "required": False},
@@ -362,7 +361,6 @@ class TestEntityTypes(BaseAPITest):
     @pytest.mark.integration
     def test_entity_type_schema_validation(self):
         """Test entity type creation and updates with various schema formats."""
-        test_name = self.generate_test_name("SCHEMA_TEST")
 
         # Test 1: Simple schema
         simple_schema = {
@@ -431,7 +429,6 @@ class TestEntityTypes(BaseAPITest):
     def test_entity_type_get_operations(self):
         """Test retrieving entity types and validating the results."""
         # Create a test entity type for validation
-        test_name = self.generate_test_name("GET_TEST")
         test_schema = {
             "test_get_field": {"type": "string", "required": True}
         }
@@ -479,7 +476,6 @@ class TestEntityTypes(BaseAPITest):
     def test_entity_type_update_validation(self):
         """Test entity type update with various validation scenarios."""
         # Create a test entity type for update testing
-        original_name = self.generate_test_name("UPDATE_TEST")
         original_schema = {
             "original_field": {"type": "string", "required": True}
         }
@@ -546,7 +542,6 @@ class TestEntityTypes(BaseAPITest):
     def test_entity_type_delete_with_constraints(self):
         """Test entity type deletion with referential integrity constraints."""
         # Create a test entity type
-        test_type_name = self.generate_test_name("DELETE_CONSTRAINT_TYPE")
         test_schema = {
             "constraint_field": {"type": "string", "required": True}
         }
@@ -554,7 +549,6 @@ class TestEntityTypes(BaseAPITest):
         type_id = create_result['entity_type_id']
 
         # Create an entity that uses this entity type
-        test_entity_name = self.generate_test_name("CONSTRAINT_ENTITY")
         entity_result = self.create_entity(test_entity_name, type_id, attributes={
                                            "constraint_field": "test_value"})
         entity_id = entity_result['entity_id']
@@ -598,7 +592,6 @@ class TestEntityTypes(BaseAPITest):
         test_types = []
 
         for i in range(type_count):
-            name = self.generate_test_name(f"MULTI_TYPE_{i}")
             schema = {
                 f"field_{i}_1": {"type": "string", "required": True},
                 f"field_{i}_2": {"type": "number", "required": False},
