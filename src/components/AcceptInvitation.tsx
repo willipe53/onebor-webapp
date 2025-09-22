@@ -119,11 +119,12 @@ const AcceptInvitation: React.FC = () => {
 
       console.log("Step 3: Adding user to client group membership...");
       // Add user to client group
-      await apiService.modifyClientGroupMembership({
+      const membershipResult = await apiService.modifyClientGroupMembership({
         client_group_id: invitation.client_group_id,
         user_id: currentUser.user_id,
         add_or_remove: "add",
       });
+      console.log("Step 3 Result:", membershipResult);
 
       console.log(
         "Step 4: Checking if user needs primary_client_group_id set..."

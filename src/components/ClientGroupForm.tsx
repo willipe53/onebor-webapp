@@ -107,8 +107,15 @@ const ClientGroupForm: React.FC<ClientGroupFormProps> = ({
     enabled: !!currentUser?.user_id,
   });
 
-  // For now, we'll manage group members through the transfer list state
-  // In a full implementation, you might want to add a specific API to get group members
+  // Get current members of the client group (for existing groups)
+  const { data: currentMembersData } = useQuery({
+    queryKey: ["users", "group-members", editingClientGroup?.client_group_id],
+    queryFn: () =>
+      apiService.queryUsers({
+        client_group_id: editingClientGroup!.client_group_id,
+      }),
+    enabled: !!editingClientGroup?.client_group_id,
+  });
 
   // Initialize form with editing client group data
   useEffect(() => {
@@ -126,23 +133,29 @@ const ClientGroupForm: React.FC<ClientGroupFormProps> = ({
       );
       setJsonPreferences(jsonString);
 
-      // For existing groups, start with empty selected users
-      // In a full implementation, you would fetch current members here
-      setSelectedUsers([]);
+      // For existing groups, we'll set selected users when currentMembersData loads
+      // This will be handled in a separate useEffect below
 
       // Set initial form state for dirty tracking (after all fields are populated)
       setTimeout(() => {
         const { object: preferences, jsonString } = prepareJsonForForm(
           editingClientGroup.preferences
         );
+        const members = currentMembersData
+          ? currentMembersData.map((user: any) => ({
+              id: user.user_id,
+              label: user.email,
+            }))
+          : [];
+
         setInitialFormState({
           name: editingClientGroup.name || "",
           dynamicFields: preferences,
           jsonPreferences: jsonString,
-          selectedUsers: [], // Start with empty for existing groups
+          selectedUsers: members,
         });
         setIsDirty(false); // Reset dirty state when loading existing client group
-      }, 0);
+      }, 100); // Small delay to allow currentMembersData to load
     } else {
       // New client group
       setName("");
@@ -160,7 +173,18 @@ const ClientGroupForm: React.FC<ClientGroupFormProps> = ({
       });
       setIsDirty(false);
     }
-  }, [editingClientGroup]);
+  }, [editingClientGroup, currentMembersData]);
+
+  // Update selectedUsers when currentMembersData changes
+  useEffect(() => {
+    if (editingClientGroup?.client_group_id && currentMembersData) {
+      const members = currentMembersData.map((user: any) => ({
+        id: user.user_id,
+        label: user.email,
+      }));
+      setSelectedUsers(members);
+    }
+  }, [currentMembersData, editingClientGroup?.client_group_id]);
 
   // Handle JSON mode changes
   useEffect(() => {

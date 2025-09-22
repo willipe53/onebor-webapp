@@ -32,7 +32,7 @@ def lambda_handler(event, context):
         "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
         "Access-Control-Allow-Credentials": "true"
     }
-    
+
     # Handle preflight OPTIONS requests
     if event.get('httpMethod') == 'OPTIONS':
         return {
@@ -40,7 +40,7 @@ def lambda_handler(event, context):
             "headers": cors_headers,
             "body": ""
         }
-    
+
     conn = None
     try:
         body = event.get("body")
@@ -54,12 +54,31 @@ def lambda_handler(event, context):
         email = body.get("email")
         requesting_user_id = body.get(
             "requesting_user_id")  # User making the request
+        # Filter by specific client group
+        client_group_id = body.get("client_group_id")
         count_only = body.get("count_only", False)  # Default to False
 
         secrets = get_db_secret()
         conn = get_connection(secrets)
 
-        if requesting_user_id:
+        if client_group_id:
+            # Filter by specific client group membership
+            if count_only:
+                query = """
+                SELECT COUNT(DISTINCT u.user_id) as user_count
+                FROM users u
+                INNER JOIN client_group_users cgu ON u.user_id = cgu.user_id
+                WHERE cgu.client_group_id = %s
+                """
+            else:
+                query = """
+                SELECT DISTINCT u.* 
+                FROM users u
+                INNER JOIN client_group_users cgu ON u.user_id = cgu.user_id
+                WHERE cgu.client_group_id = %s
+                """
+            params = [client_group_id]
+        elif requesting_user_id:
             # Apply access control - only show users in shared client groups
             if count_only:
                 query = """
@@ -88,18 +107,30 @@ def lambda_handler(event, context):
 
         # Add specific filters if provided
         if user_id:
-            query += " AND u.user_id = %s" if requesting_user_id else " AND user_id = %s"
+            if client_group_id or requesting_user_id:
+                query += " AND u.user_id = %s"
+            else:
+                query += " AND user_id = %s"
             params.append(user_id)
 
         if sub:
-            query += " AND u.sub = %s" if requesting_user_id else " AND sub = %s"
+            if client_group_id or requesting_user_id:
+                query += " AND u.sub = %s"
+            else:
+                query += " AND sub = %s"
             params.append(sub)
 
         if email:
             if email.endswith("%"):
-                query += " AND u.email LIKE %s" if requesting_user_id else " AND email LIKE %s"
+                if client_group_id or requesting_user_id:
+                    query += " AND u.email LIKE %s"
+                else:
+                    query += " AND email LIKE %s"
             else:
-                query += " AND u.email = %s" if requesting_user_id else " AND email = %s"
+                if client_group_id or requesting_user_id:
+                    query += " AND u.email = %s"
+                else:
+                    query += " AND email = %s"
             params.append(email)
 
         with conn.cursor() as cursor:

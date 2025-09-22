@@ -1,0 +1,162 @@
+🚀 Generating curl commands for GET APIs...
+============================================================
+
+📡 Query Entity Types (/get_entity_types)
+----------------------------------------
+
+### Variation 1: Empty parameters
+curl -X POST "https://api.onebor.com/panda/get_entity_types" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COGNITO_JWT_TOKEN_HERE" \
+  -d '{}'
+
+### Variation 2: {
+  "count_only": true
+}
+curl -X POST "https://api.onebor.com/panda/get_entity_types" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COGNITO_JWT_TOKEN_HERE" \
+  -d '{
+  "count_only": true
+}'
+
+📡 Query Entities (/get_entities)
+----------------------------------------
+
+### Variation 1: {
+  "user_id": 1
+}
+curl -X POST "https://api.onebor.com/panda/get_entities" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COGNITO_JWT_TOKEN_HERE" \
+  -d '{
+  "user_id": 1
+}'
+
+### Variation 2: {
+  "user_id": 1,
+  "entity_id": 1
+}
+curl -X POST "https://api.onebor.com/panda/get_entities" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COGNITO_JWT_TOKEN_HERE" \
+  -d '{
+  "user_id": 1,
+  "entity_id": 1
+}'
+
+### Variation 3: {
+  "user_id": 1,
+  "name": "test"
+}
+curl -X POST "https://api.onebor.com/panda/get_entities" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COGNITO_JWT_TOKEN_HERE" \
+  -d '{
+  "user_id": 1,
+  "name": "test"
+}'
+
+### Variation 4: {
+  "user_id": 1,
+  "count_only": true
+}
+curl -X POST "https://api.onebor.com/panda/get_entities" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COGNITO_JWT_TOKEN_HERE" \
+  -d '{
+  "user_id": 1,
+  "count_only": true
+}'
+
+📡 Query Users (/get_users)
+----------------------------------------
+
+### Variation 1: Empty parameters
+curl -X POST "https://api.onebor.com/panda/get_users" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COGNITO_JWT_TOKEN_HERE" \
+  -d '{}'
+
+### Variation 2: {
+  "count_only": true
+}
+curl -X POST "https://api.onebor.com/panda/get_users" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COGNITO_JWT_TOKEN_HERE" \
+  -d '{
+  "count_only": true
+}'
+
+📡 Query Client Groups (/get_client_groups)
+----------------------------------------
+
+### Variation 1: Empty parameters
+curl -X POST "https://api.onebor.com/panda/get_client_groups" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COGNITO_JWT_TOKEN_HERE" \
+  -d '{}'
+
+### Variation 2: {
+  "count_only": true
+}
+curl -X POST "https://api.onebor.com/panda/get_client_groups" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COGNITO_JWT_TOKEN_HERE" \
+  -d '{
+  "count_only": true
+}'
+
+📡 Get Invitations (/manage_invitation)
+----------------------------------------
+
+### Variation 1: {
+  "action": "get"
+}
+curl -X POST "https://api.onebor.com/panda/manage_invitation" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COGNITO_JWT_TOKEN_HERE" \
+  -d '{
+  "action": "get"
+}'
+
+### Variation 2: {
+  "action": "get",
+  "code": "test"
+}
+curl -X POST "https://api.onebor.com/panda/manage_invitation" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COGNITO_JWT_TOKEN_HERE" \
+  -d '{
+  "action": "get",
+  "code": "test"
+}'
+
+### Variation 3: {
+  "action": "get",
+  "client_group_id": 1
+}
+curl -X POST "https://api.onebor.com/panda/manage_invitation" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COGNITO_JWT_TOKEN_HERE" \
+  -d '{
+  "action": "get",
+  "client_group_id": 1
+}'
+
+### Variation 4: {
+  "action": "get",
+  "count_only": true
+}
+curl -X POST "https://api.onebor.com/panda/manage_invitation" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COGNITO_JWT_TOKEN_HERE" \
+  -d '{
+  "action": "get",
+  "count_only": true
+}'
+
+✅ Generated 14 curl commands
+
+📝 Note: Replace 'COGNITO_JWT_TOKEN_HERE' with your actual Cognito JWT token
+🔗 Get token by authenticating with AWS Cognito using TEST_USERNAME and TEST_PASSWORD from .env

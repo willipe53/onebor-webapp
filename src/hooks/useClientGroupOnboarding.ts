@@ -84,6 +84,24 @@ export const useClientGroupOnboarding = (
       return;
     }
 
+    // Skip onboarding if there's a pending invitation being processed
+    const pendingInvitationCode = localStorage.getItem("pendingInvitationCode");
+    if (pendingInvitationCode) {
+      console.log(
+        "🔗 Skipping normal onboarding - pending invitation found:",
+        pendingInvitationCode
+      );
+      setState({
+        isLoading: false,
+        needsOnboarding: false,
+        user: null,
+        error: null,
+      });
+      hasProcessedRef.current = false;
+      lastUserIdRef.current = null;
+      return;
+    }
+
     // Reset processing state if user changed
     if (lastUserIdRef.current !== cognitoUserId) {
       hasProcessedRef.current = false;

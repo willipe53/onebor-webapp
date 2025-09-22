@@ -1,7 +1,9 @@
 import { userPool } from "../config/cognito";
 
-// Always use the production API endpoint
-const API_BASE_URL = "https://api.onebor.com/panda";
+// Use proxy in development, direct API in production
+const API_BASE_URL = import.meta.env.DEV
+  ? "/api" // Development: use Vite proxy
+  : "https://api.onebor.com/panda"; // Production: direct API Gateway
 
 // Client Groups
 export interface ClientGroup {
@@ -223,6 +225,7 @@ export interface QueryUsersRequest {
   sub?: string; // Cognito user ID
   email?: string;
   requesting_user_id?: number; // For access control - only see users in shared client groups
+  client_group_id?: number; // Filter by specific client group membership
 }
 
 export type QueryUsersResponse = User[];
