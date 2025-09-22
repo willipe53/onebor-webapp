@@ -12,8 +12,12 @@ import zipfile
 import re
 import boto3
 from botocore.exceptions import ClientError
+from dotenv import load_dotenv
 
-REGION = "us-east-2"
+# Load environment variables from scripts/.env
+load_dotenv()
+
+REGION = os.getenv("REGION", "us-east-2")
 ACCOUNT_ID = "316490106381"
 
 ROLE_NAME = "getPandaEntityTypes-role-cpdc7xv7"

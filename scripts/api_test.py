@@ -4,12 +4,17 @@ import boto3
 import json
 import requests
 import sys
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from scripts/.env
+load_dotenv()
 
 # ---- CONFIG ----
-REGION = "us-east-2"
-USER_POOL_ID = "us-east-2_IJ1C0mWXW"
-CLIENT_ID = "1lntksiqrqhmjea6obrrrrnmh1"
-API_BASE_URL = "https://api.onebor.com/panda"
+REGION = os.getenv("REGION", "us-east-2")
+USER_POOL_ID = os.getenv("USER_POOL_ID", "us-east-2_IJ1C0mWXW")
+CLIENT_ID = os.getenv("CLIENT_ID", "1lntksiqrqhmjea6obrrrrnmh1")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.onebor.com/panda")
 # ----------------
 
 

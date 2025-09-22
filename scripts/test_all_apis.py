@@ -13,6 +13,10 @@ import requests
 import time
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+from dotenv import load_dotenv
+
+# Load environment variables from scripts/.env
+load_dotenv()
 
 # Add tests directory to path to import base_test
 sys.path.append('tests')

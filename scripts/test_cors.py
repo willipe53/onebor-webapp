@@ -5,9 +5,14 @@ Test CORS configuration for API endpoints
 
 import requests
 import json
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from scripts/.env
+load_dotenv()
 
 # Test endpoint
-API_BASE_URL = "https://api.onebor.com/panda"
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.onebor.com/panda")
 TEST_ENDPOINT = f"{API_BASE_URL}/get_entity_types"
 
 

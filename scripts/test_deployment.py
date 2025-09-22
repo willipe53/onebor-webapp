@@ -6,6 +6,11 @@ Test the deployed frontend to ensure it's working correctly
 import requests
 import time
 import sys
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from scripts/.env
+load_dotenv()
 
 
 def test_deployment():

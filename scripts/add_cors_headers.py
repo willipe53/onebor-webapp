@@ -5,6 +5,10 @@ Script to add CORS headers to all onebor Lambda functions
 
 import os
 import re
+from dotenv import load_dotenv
+
+# Load environment variables from scripts/.env
+load_dotenv()
 
 # CORS headers to add
 CORS_HEADERS = '''

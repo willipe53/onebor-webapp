@@ -6,10 +6,15 @@ Usage: python3 check_api.py <function_name>
 import sys
 import json
 import boto3
+import os
 from botocore.exceptions import ClientError
+from dotenv import load_dotenv
+
+# Load environment variables from scripts/.env
+load_dotenv()
 
 # Configuration (should match deploy_lambda.py)
-REGION = "us-east-2"
+REGION = os.getenv("REGION", "us-east-2")
 ACCOUNT_ID = "316490106381"
 ROLE_NAME = "service-role/getPandaEntityTypes-role-cpdc7xv7"
 LAYER_ARNS = ["arn:aws:lambda:us-east-2:316490106381:layer:PyMySql112Layer:2"]

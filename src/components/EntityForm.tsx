@@ -174,21 +174,75 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
     const fields: FormField[] = [];
     const addedKeys = new Set<string>();
 
-    // First, add all fields from the schema
-    if (selectedEntityType?.attributes_schema?.properties) {
-      const properties = selectedEntityType.attributes_schema.properties;
-      const required = selectedEntityType.attributes_schema.required || [];
-
-      Object.entries(properties).forEach(([key, schema]: [string, any]) => {
-        fields.push({
-          key,
-          type: schema.type || "string",
-          format: schema.format,
-          required: required.includes(key),
-          value: dynamicFields[key] || "",
-        });
-        addedKeys.add(key);
+    // Debug log for troubleshooting
+    if (selectedEntityType) {
+      console.log("🔍 EntityForm Debug:", {
+        entityTypeName: selectedEntityType.name,
+        entityTypeId: selectedEntityType.entity_type_id,
+        hasAttributesSchema: !!selectedEntityType.attributes_schema,
+        attributesSchemaType: typeof selectedEntityType.attributes_schema,
+        attributesSchemaIsString:
+          typeof selectedEntityType.attributes_schema === "string",
+        schemaLength: selectedEntityType.attributes_schema
+          ? typeof selectedEntityType.attributes_schema === "string"
+            ? selectedEntityType.attributes_schema.length
+            : JSON.stringify(selectedEntityType.attributes_schema).length
+          : 0,
       });
+
+      // Check if schema is malformed
+      if (selectedEntityType.attributes_schema) {
+        try {
+          let schema = selectedEntityType.attributes_schema;
+          if (typeof schema === "string") {
+            schema = JSON.parse(schema);
+          }
+          console.log("✅ Schema parsed successfully:", {
+            hasProperties: !!schema.properties,
+            propertiesKeys: schema.properties
+              ? Object.keys(schema.properties)
+              : [],
+          });
+        } catch (error) {
+          console.error(
+            "❌ Schema parsing failed:",
+            error,
+            "Raw schema:",
+            selectedEntityType.attributes_schema
+          );
+        }
+      }
+    }
+
+    // First, add all fields from the schema
+    if (selectedEntityType?.attributes_schema) {
+      let schema = selectedEntityType.attributes_schema;
+
+      // Parse schema if it's a string
+      if (typeof schema === "string") {
+        try {
+          schema = JSON.parse(schema);
+        } catch (error) {
+          console.error("❌ Failed to parse attributes_schema JSON:", error);
+          schema = null;
+        }
+      }
+
+      if (schema?.properties) {
+        const properties = schema.properties;
+        const required = schema.required || [];
+
+        Object.entries(properties).forEach(([key, schema]: [string, any]) => {
+          fields.push({
+            key,
+            type: schema.type || "string",
+            format: schema.format,
+            required: required.includes(key),
+            value: dynamicFields[key] || "",
+          });
+          addedKeys.add(key);
+        });
+      }
     }
 
     // Then, add any additional fields from actual entity attributes (for editing)
@@ -348,8 +402,23 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
     if (newMode === null) return; // Don't allow deselecting
 
     if (newMode === "json" && attributesMode === "form") {
-      // Switching from form to JSON - convert dynamicFields to JSON string
-      setJsonAttributes(JSON.stringify(dynamicFields, null, 2));
+      // Switching from form to JSON - convert ALL field values to JSON string
+      // This includes both schema fields and additional dynamic fields
+      const allFieldValues: Record<string, any> = {};
+
+      // Add all schema field values
+      schemaFields.forEach((field) => {
+        allFieldValues[field.key] = field.value;
+      });
+
+      // Add any additional dynamic fields that aren't in the schema
+      Object.keys(dynamicFields).forEach((key) => {
+        if (!(key in allFieldValues)) {
+          allFieldValues[key] = dynamicFields[key];
+        }
+      });
+
+      setJsonAttributes(JSON.stringify(allFieldValues, null, 2));
       setJsonError("");
     } else if (newMode === "form" && attributesMode === "json") {
       // Switching from JSON to form - validate and parse JSON

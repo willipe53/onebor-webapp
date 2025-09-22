@@ -8,12 +8,18 @@ import sys
 import os
 import json
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from scripts/.env
+load_dotenv()
 
 # Configuration
-S3_BUCKET = "onebor-app"
-CLOUDFRONT_DISTRIBUTION_ID = "E3GH09JUCHC3AZ"
-DIST_PATH = "dist"
-AWS_REGION = "us-east-1"  # CloudFront distributions are always in us-east-1
+S3_BUCKET = os.getenv("S3_BUCKET", "onebor-app")
+CLOUDFRONT_DISTRIBUTION_ID = os.getenv(
+    "CLOUDFRONT_DISTRIBUTION_ID", "E3GH09JUCHC3AZ")
+DIST_PATH = os.getenv("DIST_PATH", "dist")
+# CloudFront distributions are always in us-east-1
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 
 
 def run_command(command, description):
