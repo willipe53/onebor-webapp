@@ -19,7 +19,9 @@ import "ace-builds/src-noconflict/mode-json";
 import "ace-builds/src-noconflict/theme-github";
 import "ace-builds/src-noconflict/ext-language_tools";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "../contexts/AuthContext";
 import * as apiService from "../services/api";
+import AuditTrail from "./AuditTrail";
 
 interface EntityType {
   entity_type_id: number;
@@ -27,6 +29,9 @@ interface EntityType {
   attributes_schema: object | string;
   short_label?: string;
   label_color?: string;
+  entity_category?: string;
+  update_date?: string;
+  updated_user_id?: number;
 }
 
 interface EntityTypeFormProps {
@@ -58,9 +63,11 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
   editingEntityType,
   onClose,
 }) => {
+  const { dbUserId } = useAuth();
   const [name, setName] = useState("");
   const [shortLabel, setShortLabel] = useState("");
   const [labelColor, setLabelColor] = useState("#4caf50"); // Default green
+  const [entityCategory, setEntityCategory] = useState("");
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [attributesSchema, setAttributesSchema] = useState(
     JSON.stringify(
@@ -80,6 +87,7 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
     name: string;
     shortLabel: string;
     labelColor: string;
+    entityCategory: string;
     attributesSchema: string;
   } | null>(null);
 
@@ -93,6 +101,7 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
       name,
       shortLabel,
       labelColor,
+      entityCategory,
       attributesSchema,
     };
 
@@ -100,9 +109,17 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
       currentState.name !== initialFormState.name ||
       currentState.shortLabel !== initialFormState.shortLabel ||
       currentState.labelColor !== initialFormState.labelColor ||
+      currentState.entityCategory !== initialFormState.entityCategory ||
       currentState.attributesSchema !== initialFormState.attributesSchema
     );
-  }, [name, shortLabel, labelColor, attributesSchema, initialFormState]);
+  }, [
+    name,
+    shortLabel,
+    labelColor,
+    entityCategory,
+    attributesSchema,
+    initialFormState,
+  ]);
 
   // Update dirty state whenever form values change
   useEffect(() => {
@@ -114,6 +131,7 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
     if (editingEntityType) {
       setName(editingEntityType.name || "");
       setShortLabel(editingEntityType.short_label || "");
+      setEntityCategory(editingEntityType.entity_category || "");
 
       // Handle label_color - add # prefix if missing
       let color = editingEntityType.label_color || "4caf50";
@@ -179,6 +197,7 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
           name: editingEntityType.name || "",
           shortLabel: editingEntityType.short_label || "",
           labelColor: color,
+          entityCategory: editingEntityType.entity_category || "",
           attributesSchema: schema,
         });
         setIsDirty(false); // Reset dirty state when loading existing entity type
@@ -189,6 +208,7 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
         name: "",
         shortLabel: "",
         labelColor: "#4caf50",
+        entityCategory: "",
         attributesSchema: JSON.stringify(
           { type: "object", properties: {} },
           null,
@@ -209,6 +229,7 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
         setName("");
         setShortLabel("");
         setLabelColor("#4caf50");
+        setEntityCategory("");
         setAttributesSchema(
           JSON.stringify(
             {
@@ -242,6 +263,30 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      apiService.deleteRecord(editingEntityType!.entity_type_id, "Entity Type"),
+    onSuccess: () => {
+      // Show success notification
+      setShowSuccessSnackbar(true);
+
+      // Invalidate and refetch entity types queries to refresh tables immediately
+      queryClient.invalidateQueries({ queryKey: ["entity-types"] });
+      queryClient.refetchQueries({ queryKey: ["entity-types"] });
+
+      // Also invalidate entities queries since entity types affect entity displays
+      queryClient.invalidateQueries({ queryKey: ["entities"] });
+      queryClient.refetchQueries({ queryKey: ["entities"] });
+
+      // Close modal after successful deletion
+      if (onClose) {
+        setTimeout(() => {
+          onClose();
+        }, 1000); // 1 second delay to show success message
+      }
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -264,8 +309,12 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
       } = {
         name,
         attributes_schema: schemaObject,
+        user_id: dbUserId!,
         ...(shortLabel.trim() && { short_label: shortLabel.trim() }),
         ...(colorForDb.trim() && { label_color: colorForDb.trim() }),
+        ...(entityCategory.trim() && {
+          entity_category: entityCategory.trim(),
+        }),
       };
 
       // Add entity_type_id for updates
@@ -372,6 +421,14 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
           </Alert>
         )}
 
+        {deleteMutation.isError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Error:{" "}
+            {deleteMutation.error?.message ||
+              `Failed to delete entity type "${editingEntityType?.name}"`}
+          </Alert>
+        )}
+
         {mutation.isSuccess && !editingEntityType && (
           <Alert severity="success" sx={{ mb: 2 }}>
             Entity type created successfully!
@@ -399,6 +456,15 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
               required
               fullWidth
               disabled={mutation.isPending}
+            />
+
+            <TextField
+              label="Entity Category"
+              value={entityCategory}
+              onChange={(e) => setEntityCategory(e.target.value)}
+              fullWidth
+              disabled={mutation.isPending}
+              helperText="Optional category for grouping entity types"
             />
 
             <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
@@ -595,36 +661,77 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
               </Typography>
             </FormControl>
 
+            {/* Audit Trail */}
+            <AuditTrail
+              updateDate={editingEntityType?.update_date}
+              updatedUserId={editingEntityType?.updated_user_id}
+            />
+
             <Box
               sx={{
                 display: "flex",
-                justifyContent: "flex-end",
-                gap: 2,
+                justifyContent: "space-between",
+                alignItems: "center",
                 mt: 2,
                 flexShrink: 0,
               }}
             >
-              {editingEntityType && onClose && (
+              {/* Delete button - only show when editing */}
+              {editingEntityType && (
                 <Button
                   variant="outlined"
-                  onClick={onClose}
-                  disabled={mutation.isPending}
+                  color="error"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Are you sure you want to delete "${editingEntityType.name}"?\n\nThis action cannot be undone and may affect related entities.`
+                      )
+                    ) {
+                      deleteMutation.mutate();
+                    }
+                  }}
+                  disabled={mutation.isPending || deleteMutation.isPending}
+                  sx={{ minWidth: "auto" }}
                 >
-                  Cancel
+                  {deleteMutation.isPending ? (
+                    <>
+                      <CircularProgress size={16} sx={{ mr: 1 }} />
+                      Deleting...
+                    </>
+                  ) : (
+                    "Delete"
+                  )}
                 </Button>
               )}
-              <Button type="submit" variant="contained" disabled={!canSubmit}>
-                {mutation.isPending ? (
-                  <>
-                    <CircularProgress size={20} sx={{ mr: 1 }} />
-                    {editingEntityType ? "Updating..." : "Creating..."}
-                  </>
-                ) : editingEntityType?.entity_type_id ? (
-                  `Update ${editingEntityType.name}`
-                ) : (
-                  "Create Entity Type"
+
+              {/* Action buttons */}
+              <Box sx={{ display: "flex", gap: 2 }}>
+                {editingEntityType && onClose && (
+                  <Button
+                    variant="outlined"
+                    onClick={onClose}
+                    disabled={mutation.isPending || deleteMutation.isPending}
+                  >
+                    Cancel
+                  </Button>
                 )}
-              </Button>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={!canSubmit || deleteMutation.isPending}
+                >
+                  {mutation.isPending ? (
+                    <>
+                      <CircularProgress size={20} sx={{ mr: 1 }} />
+                      {editingEntityType ? "Updating..." : "Creating..."}
+                    </>
+                  ) : editingEntityType?.entity_type_id ? (
+                    `Update ${editingEntityType.name}`
+                  ) : (
+                    "Create Entity Type"
+                  )}
+                </Button>
+              </Box>
             </Box>
           </Box>
         </form>
@@ -642,7 +749,9 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
           onClose={() => setShowSuccessSnackbar(false)}
           sx={{ width: "100%" }}
         >
-          {editingEntityType
+          {deleteMutation.isSuccess
+            ? "Entity type deleted successfully!"
+            : editingEntityType
             ? "Entity type updated successfully!"
             : "Entity type created successfully!"}
         </Alert>

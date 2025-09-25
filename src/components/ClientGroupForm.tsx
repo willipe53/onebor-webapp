@@ -14,6 +14,7 @@ import * as apiService from "../services/api";
 import FormJsonToggle from "./FormJsonToggle";
 import { prepareJsonForForm } from "../utils";
 import TransferList, { type TransferListItem } from "./TransferList";
+import AuditTrail from "./AuditTrail";
 
 interface ClientGroupFormProps {
   editingClientGroup: any;
@@ -699,6 +700,12 @@ const ClientGroupForm: React.FC<ClientGroupFormProps> = ({
             </Button>
           </Box>
         )}
+
+        {/* Audit Trail */}
+        <AuditTrail
+          updateDate={editingClientGroup.update_date}
+          updatedUserId={editingClientGroup.updated_user_id}
+        />
 
         {/* Submit Button */}
         <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 2 }}>

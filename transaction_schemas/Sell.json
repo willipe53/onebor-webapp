@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Sell",
+  "description": "Sell marketable security",
+  "type": "object",
+  "properties": {
+    "trade_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "settle_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "amount": {
+      "type": "string"
+    },
+    "price": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "trade_date",
+    "settle_date",
+    "amount",
+    "price"
+  ],
+  "additionalProperties": false,
+  "valid_instruments": [
+    "FI",
+    "FU",
+    "EQ",
+    "ETF",
+    "CCY"
+  ],
+  "valid_contra_groups": [
+    "IA",
+    "EA",
+    "P"
+  ]
+}

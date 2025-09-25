@@ -25,6 +25,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import * as apiService from "../services/api";
 import EntityForm from "./EntityForm";
+import EntityTypesTable from "./EntityTypesTable";
 
 interface EntitiesTableProps {
   groupSelectionMode?: {
@@ -66,9 +67,9 @@ const EntitiesTable: React.FC<EntitiesTableProps> = ({
   const [nameFilter, setNameFilter] = useState("");
   const [entityIdFilter, setEntityIdFilter] = useState("");
   const [entityTypeFilter, setEntityTypeFilter] = useState("");
-  const [parentEntityFilter, setParentEntityFilter] = useState("");
   const [editingEntity, setEditingEntity] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEntityTypesModalOpen, setIsEntityTypesModalOpen] = useState(false);
 
   // Group selection mode state
   const [selectedEntityIds, setSelectedEntityIds] = useState<Set<number>>(
@@ -132,13 +133,12 @@ const EntitiesTable: React.FC<EntitiesTableProps> = ({
     // Transform array format [id, name, type_id, parent_id, attributes] to object format
     if (Array.isArray(rawEntitiesData)) {
       return rawEntitiesData.map((row: any) => {
-        if (Array.isArray(row) && row.length >= 5) {
+        if (Array.isArray(row) && row.length >= 4) {
           return {
             entity_id: row[0],
             name: row[1],
             entity_type_id: row[2],
-            parent_entity_id: row[3],
-            attributes: row[4], // Don't parse here, let formatAttributes handle it
+            attributes: row[3], // Don't parse here, let formatAttributes handle it
           };
         }
         return row;
@@ -347,63 +347,6 @@ const EntitiesTable: React.FC<EntitiesTableProps> = ({
         headerName: "Name",
       },
       {
-        field: "parent_entity_id",
-        headerName: "Parent",
-        renderCell: (params: GridRenderCellParams) => {
-          if (!params.value) {
-            return (
-              <Typography variant="body2" color="text.secondary">
-                —
-              </Typography>
-            );
-          }
-
-          // Find the parent entity
-          const parentEntity = entitiesData?.find(
-            (entity) => entity.entity_id === params.value
-          );
-
-          if (!parentEntity) {
-            return (
-              <Typography variant="body2" color="text.secondary">
-                Unknown
-              </Typography>
-            );
-          }
-
-          // Find the parent's entity type for color information
-          const parentEntityType = entityTypesData?.find(
-            (type) => type.entity_type_id === parentEntity.entity_type_id
-          );
-          const parentShortLabel = parentEntityType?.short_label;
-          const parentLabelColor = parentEntityType?.label_color;
-          const parentColorValue = parentLabelColor?.startsWith("#")
-            ? parentLabelColor
-            : parentLabelColor
-            ? `#${parentLabelColor}`
-            : "#000000";
-
-          const chipLabel = parentShortLabel
-            ? `${parentShortLabel} ${parentEntity.name}`
-            : parentEntity.name;
-
-          return (
-            <Chip
-              label={chipLabel}
-              size="small"
-              sx={{
-                backgroundColor: parentColorValue + "20", // 20% opacity background
-                color: parentColorValue,
-                fontWeight: "bold",
-                "& .MuiChip-label": {
-                  fontWeight: "bold",
-                },
-              }}
-            />
-          );
-        },
-      },
-      {
         field: "attributes",
         headerName: "Attributes",
         flex: 1,
@@ -471,8 +414,6 @@ const EntitiesTable: React.FC<EntitiesTableProps> = ({
     if (nameFilter) newFilters.name = nameFilter;
     if (entityTypeFilter)
       newFilters.entity_type_id = parseInt(entityTypeFilter);
-    if (parentEntityFilter)
-      newFilters.parent_entity_id = parseInt(parentEntityFilter);
     setFilters({ ...newFilters, user_id: currentUser!.user_id });
   };
 
@@ -481,7 +422,6 @@ const EntitiesTable: React.FC<EntitiesTableProps> = ({
     setNameFilter("");
     setEntityIdFilter("");
     setEntityTypeFilter("");
-    setParentEntityFilter("");
   };
 
   const handleRowClick = (params: GridRowParams) => {
@@ -585,23 +525,64 @@ const EntitiesTable: React.FC<EntitiesTableProps> = ({
             </Button>
           </>
         ) : (
-          <Button
-            variant="contained"
-            color="success"
-            size="small"
-            startIcon={<Add />}
-            onClick={() => {
-              setEditingEntity({}); // Set empty object for new entity
-              setIsModalOpen(true);
-            }}
-            sx={{
-              borderRadius: "20px",
-              textTransform: "none",
-              fontWeight: 600,
-            }}
-          >
-            New
-          </Button>
+          <>
+            <Button
+              variant="contained"
+              color="success"
+              size="small"
+              startIcon={<Add />}
+              onClick={() => {
+                setEditingEntity({}); // Set empty object for new entity
+                setIsModalOpen(true);
+              }}
+              sx={{
+                borderRadius: "20px",
+                textTransform: "none",
+                fontWeight: 600,
+              }}
+            >
+              New
+            </Button>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                marginLeft: "auto",
+              }}
+            >
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                onClick={() => setIsEntityTypesModalOpen(true)}
+                sx={{
+                  borderRadius: "20px",
+                  textTransform: "none",
+                  fontWeight: 600,
+                }}
+              >
+                Edit Entity Types
+              </Button>
+              <Tooltip
+                title="Manage entity types and their properties. Entity types define categories for organizing your entities (e.g., Investor, Fund, Property)."
+                placement="top"
+              >
+                <IconButton
+                  size="small"
+                  sx={{
+                    color: "primary.main",
+                    p: 0.25,
+                    "&:hover": {
+                      backgroundColor: "rgba(25, 118, 210, 0.1)",
+                    },
+                  }}
+                >
+                  <InfoOutlined fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </>
         )}
       </Box>
 
@@ -650,13 +631,6 @@ const EntitiesTable: React.FC<EntitiesTableProps> = ({
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              label="Parent Entity ID"
-              value={parentEntityFilter}
-              onChange={(e) => setParentEntityFilter(e.target.value)}
-              size="small"
-              sx={{ minWidth: 150 }}
-            />
           </Stack>
           <Stack direction="row" spacing={2}>
             <Button variant="contained" onClick={handleFilter}>
@@ -709,11 +683,11 @@ const EntitiesTable: React.FC<EntitiesTableProps> = ({
                 justifyContent: "flex-start",
               },
               "& .MuiDataGrid-columnHeaders": {
-                backgroundColor: "rgba(25, 118, 210, 0.15) !important", // Slightly more visible blue
+                backgroundColor: "#f5f5f5 !important", // Solid light gray background
                 borderBottom: "1px solid rgba(25, 118, 210, 0.2) !important",
               },
               "& .MuiDataGrid-columnHeader": {
-                backgroundColor: "rgba(25, 118, 210, 0.15) !important",
+                backgroundColor: "#f5f5f5 !important", // Solid light gray background
                 display: "flex",
                 alignItems: "center",
               },
@@ -749,6 +723,33 @@ const EntitiesTable: React.FC<EntitiesTableProps> = ({
             editingEntity={editingEntity}
             onClose={handleCloseModal}
           />
+        </Box>
+      </Modal>
+
+      {/* Entity Types Modal */}
+      <Modal
+        open={isEntityTypesModalOpen}
+        onClose={() => setIsEntityTypesModalOpen(false)}
+        aria-labelledby="entity-types-modal"
+        aria-describedby="entity-types-table"
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "95%",
+            maxWidth: 1200,
+            height: "90vh",
+            bgcolor: "background.paper",
+            borderRadius: 2,
+            boxShadow: 24,
+            p: 0,
+            overflow: "hidden",
+          }}
+        >
+          <EntityTypesTable />
         </Box>
       </Modal>
     </Box>

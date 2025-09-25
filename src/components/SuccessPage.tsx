@@ -12,21 +12,18 @@ import {
   CircularProgress,
   Badge,
 } from "@mui/material";
-import { ViewList, Email, Dashboard, People, Group } from "@mui/icons-material";
+import { ViewList, Dashboard, People, Receipt } from "@mui/icons-material";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import { styled } from "@mui/material/styles";
 import oneborLogo from "../assets/images/oneborlogo.png";
 import leftfingerImage from "../assets/images/leftfinger.png";
 import EntitiesTable from "./EntitiesTable";
-import EntityTypesTable from "./EntityTypesTable";
-import InvitationsTable from "./InvitationsTable";
 import UsersTable from "./UsersTable";
-import ClientGroupsTable from "./ClientGroupsTable";
+import TransactionsTable from "./TransactionsTable";
 import ClientGroupOnboarding from "./ClientGroupOnboarding";
 import OneBorIntroduction from "./OneBorIntroduction";
 import { useClientGroupOnboarding } from "../hooks/useClientGroupOnboarding";
-import { parseServerDate } from "../utils";
 import * as apiService from "../services/api";
 
 const HeaderLogo = styled("img")({
@@ -58,79 +55,35 @@ const SuccessPage: React.FC = () => {
     enabled: !!currentUser?.user_id,
   });
 
-  const { data: entityTypesCount } = useQuery({
-    queryKey: ["entity-type-count"],
-    queryFn: () => apiService.queryEntityTypeCount(),
-  });
-
-  // Get user's client groups for invitation count
-  const { data: userClientGroups } = useQuery({
-    queryKey: ["client-groups", currentUser?.user_id],
-    queryFn: () =>
-      apiService.queryClientGroups({ user_id: currentUser!.user_id }),
-    enabled: !!currentUser?.user_id,
-  });
-
-  const { data: invitationsCount } = useQuery({
-    queryKey: ["invitation-count-unexpired", userClientGroups],
-    queryFn: async () => {
-      if (!userClientGroups || userClientGroups.length === 0) {
-        // console.log("🔍 SuccessPage - No client groups, invitation count = 0");
-        return 0;
-      }
-
-      let totalUnexpiredCount = 0;
-      for (const group of userClientGroups) {
-        try {
-          // Get all invitations for this group, then count unexpired ones
-          const invitations = await apiService.manageInvitation({
-            action: "get",
-            client_group_id: group.client_group_id,
-          });
-
-          const invitationArray = Array.isArray(invitations)
-            ? invitations
-            : [invitations];
-          const unexpiredCount = invitationArray.filter((invitation) => {
-            if (!invitation || !("expires_at" in invitation)) return false;
-            // Parse server date and check if not expired
-            const expiresAt = parseServerDate(invitation.expires_at);
-            const now = new Date();
-            return expiresAt > now;
-          }).length;
-
-          totalUnexpiredCount += unexpiredCount;
-        } catch (error) {
-          console.error(
-            `Error getting invitation count for group ${group.client_group_id}:`,
-            error
-          );
-        }
-      }
-      // console.log(
-      //   `🔍 SuccessPage - Total unexpired invitation count: ${totalUnexpiredCount}`
-      // );
-      return totalUnexpiredCount;
-    },
-    enabled: !!userClientGroups && userClientGroups.length > 0,
-  });
-
   const { data: usersCount } = useQuery({
-    queryKey: ["user-count", currentUser?.user_id],
+    queryKey: [
+      "user-count",
+      currentUser?.user_id,
+      currentUser?.primary_client_group_id,
+    ],
     queryFn: () =>
-      apiService.queryUserCount({
+      apiService.queryUsers({
         requesting_user_id: currentUser!.user_id,
+        client_group_id: currentUser!.primary_client_group_id,
       }),
-    enabled: !!currentUser?.user_id,
+    enabled: !!currentUser?.user_id && !!currentUser?.primary_client_group_id,
+    select: (data) => (Array.isArray(data) ? data.length : 0),
   });
 
-  const { data: clientGroupsCount } = useQuery({
-    queryKey: ["client-group-count", currentUser?.user_id],
+  const { data: transactionsCount } = useQuery({
+    queryKey: [
+      "transaction-count",
+      currentUser?.user_id,
+      currentUser?.primary_client_group_id,
+    ],
     queryFn: () =>
-      apiService.queryClientGroupCount({
+      apiService.queryTransactions({
         user_id: currentUser!.user_id,
+        client_group_id: currentUser!.primary_client_group_id,
+        count_only: true,
       }),
-    enabled: !!currentUser?.user_id,
+    enabled: !!currentUser?.user_id && !!currentUser?.primary_client_group_id,
+    select: (data) => (typeof data === "number" ? data : data?.length || 0),
   });
 
   // Client group onboarding logic
@@ -257,13 +210,9 @@ const SuccessPage: React.FC = () => {
       case 1:
         return <EntitiesTable />;
       case 2:
-        return <EntityTypesTable />;
-      case 3:
-        return <ClientGroupsTable />;
-      case 4:
         return <UsersTable />;
-      case 5:
-        return <InvitationsTable />;
+      case 3:
+        return <TransactionsTable />;
       default:
         return null;
     }
@@ -357,10 +306,8 @@ const SuccessPage: React.FC = () => {
           <Tabs value={currentTab} onChange={handleTabChange}>
             <Tab icon={<Dashboard />} label="Dashboard" />
             {renderTabWithBadge(<ViewList />, "Entities", entitiesCount)}
-            {renderTabWithBadge(<ViewList />, "Entity Types", entityTypesCount)}
-            {renderTabWithBadge(<Group />, "Client Groups", clientGroupsCount)}
             {renderTabWithBadge(<People />, "Users", usersCount)}
-            {renderTabWithBadge(<Email />, "Invitations", invitationsCount)}
+            {renderTabWithBadge(<Receipt />, "Transactions", transactionsCount)}
           </Tabs>
         </Box>
       </Box>

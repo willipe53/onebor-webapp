@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Split",
+  "description": "Split",
+  "type": "object",
+  "properties": {
+    "ratio": {
+      "type": "string"
+    },
+    "post_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "record_date": {
+      "type": "string",
+      "format": "date"
+    }
+  },
+  "required": [
+    "nan"
+  ],
+  "additionalProperties": false,
+  "valid_instruments": [
+    "EQ"
+  ],
+  "valid_contra_groups": [
+    "[]"
+  ]
+}

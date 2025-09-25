@@ -21,6 +21,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import * as apiService from "../services/api";
 import FormJsonToggle from "./FormJsonToggle";
+import AuditTrail from "./AuditTrail";
 import {
   prettyPrint,
   isValidEmail,
@@ -42,13 +43,22 @@ interface FormField {
 interface EntityFormProps {
   editingEntity?: any;
   onClose?: () => void;
+  onSuccess?: (entity: any) => void;
+  defaultEntityType?: string;
+  allowedEntityTypes?: string[];
+  disableDialog?: boolean; // New prop to disable internal Dialog wrapper
 }
 
-const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
+const EntityForm: React.FC<EntityFormProps> = ({
+  editingEntity,
+  onClose,
+  onSuccess,
+  defaultEntityType,
+  allowedEntityTypes,
+  disableDialog = false,
+}) => {
   const { userId } = useAuth();
   const [name, setName] = useState("");
-  const [selectedParentEntity, setSelectedParentEntity] =
-    useState<apiService.Entity | null>(null);
   const [selectedEntityType, setSelectedEntityType] =
     useState<apiService.EntityType | null>(null);
   const [dynamicFields, setDynamicFields] = useState<Record<string, any>>({});
@@ -60,7 +70,6 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
   const [isDirty, setIsDirty] = useState(false);
   const [initialFormState, setInitialFormState] = useState<{
     name: string;
-    selectedParentEntity: apiService.Entity | null;
     selectedEntityType: apiService.EntityType | null;
     dynamicFields: Record<string, any>;
     jsonAttributes: string;
@@ -74,7 +83,6 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
 
     const currentState = {
       name,
-      selectedParentEntity,
       selectedEntityType,
       dynamicFields,
       jsonAttributes,
@@ -82,8 +90,6 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
 
     return (
       currentState.name !== initialFormState.name ||
-      currentState.selectedParentEntity?.entity_id !==
-        initialFormState.selectedParentEntity?.entity_id ||
       currentState.selectedEntityType?.entity_type_id !==
         initialFormState.selectedEntityType?.entity_type_id ||
       JSON.stringify(currentState.dynamicFields) !==
@@ -92,7 +98,6 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
     );
   }, [
     name,
-    selectedParentEntity,
     selectedEntityType,
     dynamicFields,
     jsonAttributes,
@@ -125,49 +130,14 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
     queryFn: () => apiService.queryEntityTypes({}),
   });
 
-  // Fetch entities for parent dropdown
-  const { data: rawEntitiesData, isLoading: entitiesLoading } = useQuery({
-    queryKey: ["entities", currentUser?.user_id],
-    queryFn: () => apiService.queryEntities({ user_id: currentUser!.user_id }),
-    enabled: !!currentUser?.user_id,
-  });
-
-  // Use entity types data directly since it's an array
-  const entityTypesData = rawEntityTypesData || [];
-
-  // Transform entities data for parent dropdown
-  const entitiesData = useMemo(() => {
-    if (!rawEntitiesData) return [];
-
-    // Check if data is already in object format
-    if (
-      Array.isArray(rawEntitiesData) &&
-      rawEntitiesData.length > 0 &&
-      typeof rawEntitiesData[0] === "object" &&
-      "entity_id" in rawEntitiesData[0]
-    ) {
-      return rawEntitiesData;
+  // Use entity types data directly since it's an array, filter by allowed types if specified
+  const entityTypesData = useMemo(() => {
+    const allTypes = rawEntityTypesData || [];
+    if (allowedEntityTypes && allowedEntityTypes.length > 0) {
+      return allTypes.filter((et) => allowedEntityTypes.includes(et.name));
     }
-
-    // Transform array format [id, name, type_id, parent_id, attributes] to object format
-    if (Array.isArray(rawEntitiesData)) {
-      return rawEntitiesData.map((row: any) => {
-        if (Array.isArray(row) && row.length >= 5) {
-          return {
-            entity_id: row[0],
-            name: row[1],
-            entity_type_id: row[2],
-            parent_entity_id: row[3],
-            attributes:
-              typeof row[4] === "string" ? JSON.parse(row[4]) : row[4],
-          };
-        }
-        return row;
-      });
-    }
-
-    return rawEntitiesData;
-  }, [rawEntitiesData]);
+    return allTypes;
+  }, [rawEntityTypesData, allowedEntityTypes]);
 
   // Extract schema fields from selected entity type
   const schemaFields = useMemo<FormField[]>(() => {
@@ -326,18 +296,22 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
     return fields;
   }, [selectedEntityType, dynamicFields, editingEntity]);
 
+  // Set default entity type for new entities
+  useEffect(() => {
+    if (!editingEntity && defaultEntityType && entityTypesData.length > 0) {
+      const defaultType = entityTypesData.find(
+        (et) => et.name === defaultEntityType
+      );
+      if (defaultType) {
+        setSelectedEntityType(defaultType);
+      }
+    }
+  }, [defaultEntityType, entityTypesData, editingEntity]);
+
   // Populate form when editing an entity
   useEffect(() => {
     if (editingEntity) {
       setName(editingEntity.name || "");
-
-      // Find and set the parent entity
-      if (editingEntity.parent_entity_id && entitiesData) {
-        const parent = entitiesData.find(
-          (e) => e.entity_id === editingEntity.parent_entity_id
-        );
-        setSelectedParentEntity(parent || null);
-      }
 
       // Find and set the entity type
       if (editingEntity.entity_type_id && entityTypesData) {
@@ -360,12 +334,6 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
       setTimeout(() => {
         setInitialFormState({
           name: editingEntity.name || "",
-          selectedParentEntity:
-            editingEntity.parent_entity_id && entitiesData
-              ? entitiesData.find(
-                  (e) => e.entity_id === editingEntity.parent_entity_id
-                ) || null
-              : null,
           selectedEntityType:
             editingEntity.entity_type_id && entityTypesData
               ? entityTypesData.find(
@@ -385,14 +353,13 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
       // For new entities, set initial state immediately
       setInitialFormState({
         name: "",
-        selectedParentEntity: null,
         selectedEntityType: null,
         dynamicFields: {},
         jsonAttributes: "",
       });
       setIsDirty(false);
     }
-  }, [editingEntity, entitiesData, entityTypesData]);
+  }, [editingEntity, entityTypesData]);
 
   // Handle switching between form and JSON modes
   const handleModeChange = (
@@ -481,11 +448,10 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
         return apiService.createEntity(data as apiService.CreateEntityRequest);
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       if (!editingEntity?.entity_id) {
         // Reset form only for create mode
         setName("");
-        setSelectedParentEntity(null);
         setSelectedEntityType(null);
         setDynamicFields({});
         setErrors({});
@@ -499,6 +465,11 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
       // Invalidate and refetch entities queries to refresh tables immediately
       queryClient.invalidateQueries({ queryKey: ["entities"] });
       queryClient.refetchQueries({ queryKey: ["entities"] });
+
+      // Call onSuccess callback if provided (for new entities)
+      if (onSuccess && !editingEntity?.entity_id && result) {
+        onSuccess(result);
+      }
 
       // Close modal after success (with a small delay to show the success message)
       if (onClose) {
@@ -527,6 +498,26 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
         if (onClose) {
           onClose();
         }
+      }
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      apiService.deleteRecord(editingEntity!.entity_id, "Entity"),
+    onSuccess: () => {
+      // Show success notification
+      setShowSuccessSnackbar(true);
+
+      // Invalidate and refetch entities queries to refresh tables immediately
+      queryClient.invalidateQueries({ queryKey: ["entities"] });
+      queryClient.refetchQueries({ queryKey: ["entities"] });
+
+      // Close modal after successful deletion
+      if (onClose) {
+        setTimeout(() => {
+          onClose();
+        }, 1000); // 1 second delay to show success message
       }
     },
   });
@@ -584,7 +575,6 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
       user_id: currentUser!.user_id,
       name,
       entity_type_id: selectedEntityType?.entity_type_id,
-      parent_entity_id: selectedParentEntity?.entity_id || null,
       attributes: finalAttributes,
     };
 
@@ -760,7 +750,7 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
     );
   };
 
-  if (entityTypesLoading || entitiesLoading) {
+  if (entityTypesLoading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", p: 3 }}>
         <CircularProgress />
@@ -768,8 +758,26 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
     );
   }
 
+  const containerSx = disableDialog
+    ? {
+        // When embedded in another modal, remove Paper styling
+        p: 0,
+        maxWidth: "none",
+        mx: 0,
+        mt: 0,
+        mb: 0,
+        boxShadow: "none",
+        backgroundColor: "transparent",
+      }
+    : {
+        // Default Paper styling for standalone use
+        p: 3,
+        maxWidth: 800,
+        mx: "auto",
+      };
+
   return (
-    <Paper sx={{ p: 3, maxWidth: 800, mx: "auto" }}>
+    <Paper sx={containerSx}>
       <Box
         sx={{
           display: "flex",
@@ -805,6 +813,15 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
         </Alert>
       )}
 
+      {deleteMutation.error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Failed to delete entity "{editingEntity?.name}":{" "}
+          {deleteMutation.error instanceof Error
+            ? deleteMutation.error.message
+            : "Unknown error"}
+        </Alert>
+      )}
+
       {errors.general && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {errors.general}
@@ -830,41 +847,7 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
           sx={{ mb: 3 }}
         />
 
-        {/* Second Line: Parent Entity */}
-        <Autocomplete
-          options={(entitiesData || []).filter(
-            (entity) =>
-              // Exclude the current entity from parent options when editing
-              // (an entity cannot be its own parent)
-              !editingEntity || entity.entity_id !== editingEntity.entity_id
-          )}
-          getOptionLabel={(option) => {
-            if (!option.name) return "";
-
-            // Find the entity type name for this entity
-            const entityType = entityTypesData?.find(
-              (type) => type.entity_type_id === option.entity_type_id
-            );
-            const typeName = entityType?.name || "Unknown Type";
-
-            return `${option.name} (${typeName})`;
-          }}
-          getOptionKey={(option) => option.entity_id}
-          value={selectedParentEntity}
-          onChange={(_, newValue) => setSelectedParentEntity(newValue)}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label="Parent Entity"
-              helperText="Optional: Select a parent entity"
-              disabled={mutation.isPending}
-            />
-          )}
-          disabled={mutation.isPending}
-          sx={{ mb: 3 }}
-        />
-
-        {/* Third Line: Entity Type */}
+        {/* Second Line: Entity Type */}
         <Autocomplete
           options={entityTypesData || []}
           getOptionLabel={(option) => option.name || ""}
@@ -992,42 +975,85 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
           </Paper>
         )}
 
+        {/* Audit Trail */}
+        <AuditTrail
+          updateDate={editingEntity?.update_date}
+          updatedUserId={editingEntity?.updated_user_id}
+        />
+
         {/* Action Buttons */}
         <Box
-          sx={{ display: "flex", justifyContent: "flex-end", gap: 2, mt: 3 }}
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mt: 3,
+          }}
         >
-          {editingEntity && onClose && (
+          {/* Delete button - only show when editing */}
+          {editingEntity && (
             <Button
               variant="outlined"
+              color="error"
               size="large"
-              onClick={onClose}
-              disabled={mutation.isPending}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Are you sure you want to delete "${editingEntity.name}"?\n\nThis action cannot be undone and may affect related entities.`
+                  )
+                ) {
+                  deleteMutation.mutate();
+                }
+              }}
+              disabled={mutation.isPending || deleteMutation.isPending}
             >
-              Cancel
+              {deleteMutation.isPending ? (
+                <>
+                  <CircularProgress size={16} sx={{ mr: 1 }} />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
             </Button>
           )}
-          <Button
-            type="submit"
-            variant="contained"
-            size="large"
-            disabled={
-              mutation.isPending ||
-              !name.trim() ||
-              !selectedEntityType ||
-              (editingEntity?.entity_id && !isDirty) // Disable if editing existing entity and not dirty
-            }
-          >
-            {mutation.isPending ? (
-              <>
-                <CircularProgress size={20} sx={{ mr: 1 }} />
-                {editingEntity ? "Updating..." : "Creating..."}
-              </>
-            ) : editingEntity?.entity_id ? (
-              `Update ${editingEntity.name}`
-            ) : (
-              "Create Entity"
+
+          {/* Action buttons */}
+          <Box sx={{ display: "flex", gap: 2 }}>
+            {editingEntity && onClose && (
+              <Button
+                variant="outlined"
+                size="large"
+                onClick={onClose}
+                disabled={mutation.isPending || deleteMutation.isPending}
+              >
+                Cancel
+              </Button>
             )}
-          </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              size="large"
+              disabled={
+                mutation.isPending ||
+                deleteMutation.isPending ||
+                !name.trim() ||
+                !selectedEntityType ||
+                (editingEntity?.entity_id && !isDirty) // Disable if editing existing entity and not dirty
+              }
+            >
+              {mutation.isPending ? (
+                <>
+                  <CircularProgress size={20} sx={{ mr: 1 }} />
+                  {editingEntity ? "Updating..." : "Creating..."}
+                </>
+              ) : editingEntity?.entity_id ? (
+                `Update ${editingEntity.name}`
+              ) : (
+                "Create Entity"
+              )}
+            </Button>
+          </Box>
         </Box>
       </Box>
 
@@ -1043,7 +1069,9 @@ const EntityForm: React.FC<EntityFormProps> = ({ editingEntity, onClose }) => {
           onClose={() => setShowSuccessSnackbar(false)}
           sx={{ width: "100%" }}
         >
-          {editingEntity
+          {deleteMutation.isSuccess
+            ? "Entity deleted successfully!"
+            : editingEntity
             ? "Entity updated successfully!"
             : "Entity created successfully!"}
         </Alert>

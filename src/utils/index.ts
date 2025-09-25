@@ -103,6 +103,43 @@ export const nowAsServerDate = (): string => {
 };
 
 /**
+ * Format a database timestamp (stored in GMT) for display in user's local timezone
+ * Database timestamps are typically in format "2025-09-22 20:08:44" (GMT)
+ * This function converts them to proper local timezone display
+ */
+export const formatDatabaseTimestamp = (dbTimestamp: string): string => {
+  try {
+    // Database stores timestamps in GMT/UTC format like "2025-09-22 20:08:44"
+    // We need to explicitly treat this as UTC, then convert to local timezone
+
+    // If the timestamp doesn't already have timezone info, add 'Z' to indicate UTC
+    let utcString = dbTimestamp;
+    if (
+      !dbTimestamp.includes("T") &&
+      !dbTimestamp.includes("Z") &&
+      !dbTimestamp.includes("+")
+    ) {
+      // Convert "2025-09-22 20:08:44" to "2025-09-22T20:08:44Z"
+      utcString = dbTimestamp.replace(" ", "T") + "Z";
+    }
+
+    const date = new Date(utcString);
+    return date.toLocaleString(undefined, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      timeZoneName: "short",
+    });
+  } catch (error) {
+    console.error("Error formatting database timestamp:", error);
+    return dbTimestamp; // Fallback to original string
+  }
+};
+
+/**
  * JSON utilities for consistent handling of data that might be string or object
  */
 

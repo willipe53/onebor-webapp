@@ -2,6 +2,16 @@
 
 The asset allocators toolkit - A React + TypeScript + Vite application with AWS Cognito authentication.
 
+## 🚨 IMPORTANT: API Configuration
+
+**The only valid API URL for all stages (development, staging, production) is:**
+
+```
+https://api.onebor.com/panda
+```
+
+See `API_CONFIG.md` for detailed configuration information.
+
 ## Features
 
 - User authentication with AWS Cognito

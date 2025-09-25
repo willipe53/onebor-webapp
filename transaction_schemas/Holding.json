@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Holding",
+  "description": "Placeholder or proxy investment used for exposure reporting",
+  "type": "object",
+  "properties": {
+    "weight": {
+      "type": "string"
+    },
+    "proxy_instrument": {
+      "type": "string",
+      "enum": [
+        "instruments"
+      ]
+    }
+  },
+  "required": [
+    "nan"
+  ],
+  "additionalProperties": false,
+  "valid_instruments": [
+    "F",
+    "HF",
+    "PEF",
+    "ETF",
+    "EQ"
+  ],
+  "valid_contra_groups": [
+    "[]"
+  ]
+}

@@ -22,7 +22,7 @@ def lambda_handler(event, context):
         "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
         "Access-Control-Allow-Credentials": "true"
     }
-    
+
     # Handle preflight OPTIONS requests
     if event.get('httpMethod') == 'OPTIONS':
         return {
@@ -30,7 +30,7 @@ def lambda_handler(event, context):
             "headers": cors_headers,
             "body": ""
         }
-    
+
     conn = None
     try:
         body = event.get("body")

@@ -224,6 +224,7 @@ const InvitationsTable: React.FC = () => {
         expires_at_local: formatLocalDateShort(expiresAt), // Store formatted local time for display
         client_group_id: invitation.client_group_id,
         group_name: groupName,
+        email_sent_to: invitation.email_sent_to,
         isExpired: isExpired,
       };
     });
@@ -272,6 +273,14 @@ const InvitationsTable: React.FC = () => {
       width: 150,
       renderCell: (params: GridRenderCellParams) => (
         <Typography variant="body2">{params.value || "Unknown"}</Typography>
+      ),
+    },
+    {
+      field: "email_sent_to",
+      headerName: "Email Sent To",
+      width: 200,
+      renderCell: (params: GridRenderCellParams) => (
+        <Typography variant="body2">{params.value || "—"}</Typography>
       ),
     },
     {
@@ -432,11 +441,11 @@ const InvitationsTable: React.FC = () => {
                 justifyContent: "flex-start",
               },
               "& .MuiDataGrid-columnHeaders": {
-                backgroundColor: "rgba(25, 118, 210, 0.15) !important", // Slightly more visible blue
+                backgroundColor: "#f5f5f5 !important", // Solid light gray background
                 borderBottom: "1px solid rgba(25, 118, 210, 0.2) !important",
               },
               "& .MuiDataGrid-columnHeader": {
-                backgroundColor: "rgba(25, 118, 210, 0.15) !important",
+                backgroundColor: "#f5f5f5 !important", // Solid light gray background
                 display: "flex",
                 alignItems: "center",
               },

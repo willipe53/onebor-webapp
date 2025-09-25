@@ -83,10 +83,25 @@ const EntityTypesTable: React.FC = () => {
   });
 
   const formatSchema = (schema: any) => {
-    if (!schema || typeof schema !== "object") return "None";
+    if (!schema) return "None";
+
+    let parsedSchema;
+
+    // Handle different data types - parse to object first
+    if (typeof schema === "string") {
+      try {
+        parsedSchema = JSON.parse(schema);
+      } catch {
+        return `Invalid JSON: ${schema.substring(0, 50)}...`;
+      }
+    } else if (typeof schema === "object") {
+      parsedSchema = schema;
+    } else {
+      return String(schema);
+    }
 
     try {
-      const properties = schema.properties || {};
+      const properties = parsedSchema.properties || {};
       const propNames = Object.keys(properties);
       if (propNames.length === 0) return "None";
 
@@ -307,11 +322,11 @@ const EntityTypesTable: React.FC = () => {
                 maxHeight: "none !important",
               },
               "& .MuiDataGrid-columnHeaders": {
-                backgroundColor: "rgba(25, 118, 210, 0.15) !important", // Slightly more visible blue
+                backgroundColor: "#f5f5f5 !important", // Solid light gray background
                 borderBottom: "1px solid rgba(25, 118, 210, 0.2) !important",
               },
               "& .MuiDataGrid-columnHeader": {
-                backgroundColor: "rgba(25, 118, 210, 0.15) !important",
+                backgroundColor: "#f5f5f5 !important", // Solid light gray background
                 display: "flex",
                 alignItems: "center",
               },

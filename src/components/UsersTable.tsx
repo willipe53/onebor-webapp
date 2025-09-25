@@ -20,11 +20,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import * as apiService from "../services/api";
 import UserForm from "./UserForm";
+import ClientGroupsTable from "./ClientGroupsTable";
+import InvitationsTable from "./InvitationsTable";
 
 const UsersTable: React.FC = () => {
   const { userId } = useAuth();
   const [editingUser, setEditingUser] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isClientGroupsModalOpen, setIsClientGroupsModalOpen] = useState(false);
+  const [isInvitationsModalOpen, setIsInvitationsModalOpen] = useState(false);
 
   // Get current user's database ID
   const { data: currentUserData } = useQuery({
@@ -54,10 +58,36 @@ const UsersTable: React.FC = () => {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["users", "all", currentUser?.user_id],
-    queryFn: () =>
-      apiService.queryUsers({ requesting_user_id: currentUser!.user_id }),
-    enabled: !!currentUser?.user_id,
+    queryKey: ["users", "client-group", currentUser?.primary_client_group_id],
+    queryFn: async () => {
+      const queryParams = {
+        requesting_user_id: currentUser!.user_id,
+        client_group_id: currentUser!.primary_client_group_id,
+      };
+      console.log("🔍 UsersTable - Querying users with params:", queryParams);
+      console.log("🔍 UsersTable - Current user data:", currentUser);
+
+      try {
+        const result = await apiService.queryUsers(queryParams);
+        console.log("🔍 UsersTable - API result:", result);
+        console.log("🔍 UsersTable - API result type:", typeof result);
+        console.log("🔍 UsersTable - API result length:", result?.length);
+        if (result && Array.isArray(result)) {
+          console.log("🔍 UsersTable - First user:", result[0]);
+          console.log(
+            "🔍 UsersTable - All user IDs:",
+            result.map((u) => u.user_id)
+          );
+        }
+        return result;
+      } catch (error) {
+        console.error("🔍 UsersTable - API error:", error);
+        throw error;
+      }
+    },
+    enabled: !!currentUser?.primary_client_group_id && !!currentUser?.user_id,
+    staleTime: 0, // Always refetch
+    refetchOnMount: true, // Always refetch on mount
   });
 
   // Fetch client groups to map IDs to names
@@ -70,6 +100,12 @@ const UsersTable: React.FC = () => {
 
   // Transform users data
   const usersData = useMemo(() => {
+    console.log(
+      "🔍 UsersTable - Raw users data received:",
+      rawUsersData,
+      "Length:",
+      rawUsersData?.length
+    );
     if (!rawUsersData) return [];
 
     // Check if data is already in object format
@@ -100,6 +136,7 @@ const UsersTable: React.FC = () => {
       });
     }
 
+    console.log("🔍 UsersTable - Final processed data:", rawUsersData);
     return rawUsersData;
   }, [rawUsersData]);
 
@@ -284,6 +321,77 @@ const UsersTable: React.FC = () => {
             <InfoOutlined fontSize="small" />
           </IconButton>
         </Tooltip>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 0.5,
+            marginLeft: "auto",
+          }}
+        >
+          <Button
+            variant="contained"
+            color="primary"
+            size="small"
+            onClick={() => setIsClientGroupsModalOpen(true)}
+            sx={{
+              borderRadius: "20px",
+              textTransform: "none",
+              fontWeight: 600,
+            }}
+          >
+            Client Groups
+          </Button>
+          <Tooltip
+            title="View and manage client groups. Client groups organize users into teams or departments within your organization."
+            placement="top"
+          >
+            <IconButton
+              size="small"
+              sx={{
+                color: "primary.main",
+                p: 0.25,
+                "&:hover": {
+                  backgroundColor: "rgba(25, 118, 210, 0.1)",
+                },
+              }}
+            >
+              <InfoOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: 1 }}>
+          <Button
+            variant="contained"
+            color="primary"
+            size="small"
+            onClick={() => setIsInvitationsModalOpen(true)}
+            sx={{
+              borderRadius: "20px",
+              textTransform: "none",
+              fontWeight: 600,
+            }}
+          >
+            Invitations
+          </Button>
+          <Tooltip
+            title="View and manage user invitations. Send email invitations to add new users to your client group."
+            placement="top"
+          >
+            <IconButton
+              size="small"
+              sx={{
+                color: "primary.main",
+                p: 0.25,
+                "&:hover": {
+                  backgroundColor: "rgba(25, 118, 210, 0.1)",
+                },
+              }}
+            >
+              <InfoOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Box>
 
       {/* Data Grid */}
@@ -322,11 +430,11 @@ const UsersTable: React.FC = () => {
                 justifyContent: "flex-start",
               },
               "& .MuiDataGrid-columnHeaders": {
-                backgroundColor: "rgba(25, 118, 210, 0.15) !important",
+                backgroundColor: "#f5f5f5 !important", // Solid light gray background
                 borderBottom: "1px solid rgba(25, 118, 210, 0.2) !important",
               },
               "& .MuiDataGrid-columnHeader": {
-                backgroundColor: "rgba(25, 118, 210, 0.15) !important",
+                backgroundColor: "#f5f5f5 !important", // Solid light gray background
                 display: "flex",
                 alignItems: "center",
               },
@@ -359,6 +467,60 @@ const UsersTable: React.FC = () => {
           }}
         >
           <UserForm editingUser={editingUser} onClose={handleCloseModal} />
+        </Box>
+      </Modal>
+
+      {/* Client Groups Modal */}
+      <Modal
+        open={isClientGroupsModalOpen}
+        onClose={() => setIsClientGroupsModalOpen(false)}
+        aria-labelledby="client-groups-modal"
+        aria-describedby="client-groups-table"
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "95%",
+            maxWidth: 1200,
+            height: "90vh",
+            bgcolor: "background.paper",
+            borderRadius: 2,
+            boxShadow: 24,
+            p: 0,
+            overflow: "hidden",
+          }}
+        >
+          <ClientGroupsTable />
+        </Box>
+      </Modal>
+
+      {/* Invitations Modal */}
+      <Modal
+        open={isInvitationsModalOpen}
+        onClose={() => setIsInvitationsModalOpen(false)}
+        aria-labelledby="invitations-modal"
+        aria-describedby="invitations-table"
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "95%",
+            maxWidth: 1200,
+            height: "90vh",
+            bgcolor: "background.paper",
+            borderRadius: 2,
+            boxShadow: 24,
+            p: 0,
+            overflow: "hidden",
+          }}
+        >
+          <InvitationsTable />
         </Box>
       </Modal>
     </Box>

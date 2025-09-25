@@ -33,6 +33,8 @@ DROP TABLE IF EXISTS `client_group_entities`;
 CREATE TABLE `client_group_entities` (
   `client_group_id` int NOT NULL,
   `entity_id` int NOT NULL,
+  `update_date` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_user_id` int DEFAULT NULL,
   PRIMARY KEY (`client_group_id`,`entity_id`),
   KEY `entity_id` (`entity_id`),
   CONSTRAINT `client_group_entities_ibfk_1` FOREIGN KEY (`client_group_id`) REFERENCES `client_groups` (`client_group_id`) ON DELETE CASCADE,
@@ -65,6 +67,7 @@ DROP TABLE IF EXISTS `client_group_users`;
 CREATE TABLE `client_group_users` (
   `client_group_id` int NOT NULL,
   `user_id` int NOT NULL,
+  `update_date` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`client_group_id`,`user_id`),
   KEY `user_id` (`user_id`),
   CONSTRAINT `client_group_users_ibfk_1` FOREIGN KEY (`client_group_id`) REFERENCES `client_groups` (`client_group_id`) ON DELETE CASCADE,
@@ -83,10 +86,29 @@ CREATE TABLE `client_groups` (
   `client_group_id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL,
   `preferences` json DEFAULT NULL,
+  `update_date` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_user_id` int DEFAULT NULL,
   PRIMARY KEY (`client_group_id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=422 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=423 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Temporary view structure for view `currencies`
+--
+
+DROP TABLE IF EXISTS `currencies`;
+/*!50001 DROP VIEW IF EXISTS `currencies`*/;
+SET @saved_cs_client     = @@character_set_client;
+/*!50503 SET character_set_client = utf8mb4 */;
+/*!50001 CREATE VIEW `currencies` AS SELECT 
+ 1 AS `entity_id`,
+ 1 AS `name`,
+ 1 AS `entity_type_id`,
+ 1 AS `attributes`,
+ 1 AS `update_date`,
+ 1 AS `updated_user_id`*/;
+SET character_set_client = @saved_cs_client;
 
 --
 -- Table structure for table `entities`
@@ -99,14 +121,13 @@ CREATE TABLE `entities` (
   `entity_id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL,
   `entity_type_id` int NOT NULL,
-  `parent_entity_id` int DEFAULT NULL,
   `attributes` json DEFAULT NULL,
+  `update_date` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_user_id` int DEFAULT NULL,
   PRIMARY KEY (`entity_id`),
   KEY `fk_entities_entity_type` (`entity_type_id`),
-  KEY `fk_entities_parent` (`parent_entity_id`),
-  CONSTRAINT `fk_entities_entity_type` FOREIGN KEY (`entity_type_id`) REFERENCES `entity_types` (`entity_type_id`),
-  CONSTRAINT `fk_entities_parent` FOREIGN KEY (`parent_entity_id`) REFERENCES `entities` (`entity_id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=634 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  CONSTRAINT `fk_entities_entity_type` FOREIGN KEY (`entity_type_id`) REFERENCES `entity_types` (`entity_type_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=635 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -122,10 +143,30 @@ CREATE TABLE `entity_types` (
   `attributes_schema` json DEFAULT NULL,
   `short_label` varchar(5) DEFAULT NULL,
   `label_color` char(6) DEFAULT NULL,
+  `update_date` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_user_id` int DEFAULT NULL,
+  `entity_category` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`entity_type_id`),
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=255 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Temporary view structure for view `instruments`
+--
+
+DROP TABLE IF EXISTS `instruments`;
+/*!50001 DROP VIEW IF EXISTS `instruments`*/;
+SET @saved_cs_client     = @@character_set_client;
+/*!50503 SET character_set_client = utf8mb4 */;
+/*!50001 CREATE VIEW `instruments` AS SELECT 
+ 1 AS `entity_id`,
+ 1 AS `name`,
+ 1 AS `entity_type_id`,
+ 1 AS `attributes`,
+ 1 AS `update_date`,
+ 1 AS `updated_user_id`*/;
+SET character_set_client = @saved_cs_client;
 
 --
 -- Table structure for table `invitations`
@@ -139,9 +180,11 @@ CREATE TABLE `invitations` (
   `code` char(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT (substr(replace(uuid(),_utf8mb3'-',_utf8mb4''),1,16)),
   `expires_at` datetime NOT NULL,
   `client_group_id` int NOT NULL,
+  `updated_user_id` int DEFAULT NULL,
+  `email_sent_to` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`invitation_id`),
   UNIQUE KEY `uq_invitations_code` (`code`)
-) ENGINE=InnoDB AUTO_INCREMENT=84 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=85 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -154,8 +197,10 @@ DROP TABLE IF EXISTS `transaction_statuses`;
 CREATE TABLE `transaction_statuses` (
   `transaction_status_id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL,
+  `update_date` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_user_id` int DEFAULT NULL,
   PRIMARY KEY (`transaction_status_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -168,8 +213,11 @@ DROP TABLE IF EXISTS `transaction_types`;
 CREATE TABLE `transaction_types` (
   `transaction_type_id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL,
+  `properties` json DEFAULT NULL,
+  `update_date` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_user_id` int DEFAULT NULL,
   PRIMARY KEY (`transaction_type_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=61 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -181,25 +229,25 @@ DROP TABLE IF EXISTS `transactions`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `transactions` (
   `transaction_id` int NOT NULL AUTO_INCREMENT,
-  `party_entity_id` int NOT NULL,
-  `counterparty_entity_id` int NOT NULL,
-  `unit_entity_id` int NOT NULL,
-  `quantity` float NOT NULL,
-  `price` float NOT NULL,
+  `portfolio_entity_id` int NOT NULL,
+  `counterparty_entity_id` int DEFAULT NULL,
+  `instrument_entity_id` int NOT NULL,
   `properties` json DEFAULT NULL,
   `transaction_status_id` int NOT NULL,
   `transaction_type_id` int NOT NULL,
+  `update_date` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_user_id` int DEFAULT NULL,
   PRIMARY KEY (`transaction_id`),
   KEY `fk_trans_trans_type` (`transaction_type_id`),
   KEY `fk_trans_trans_status` (`transaction_status_id`),
-  KEY `fk_party_entity` (`party_entity_id`),
+  KEY `fk_party_entity` (`portfolio_entity_id`),
   KEY `fk_counterparty_entity` (`counterparty_entity_id`),
-  KEY `fk_unit_entity` (`unit_entity_id`),
+  KEY `fk_instrument_entity` (`instrument_entity_id`),
   CONSTRAINT `fk_counterparty_entity` FOREIGN KEY (`counterparty_entity_id`) REFERENCES `entities` (`entity_id`),
-  CONSTRAINT `fk_party_entity` FOREIGN KEY (`party_entity_id`) REFERENCES `entities` (`entity_id`),
+  CONSTRAINT `fk_instrument_entity` FOREIGN KEY (`instrument_entity_id`) REFERENCES `entities` (`entity_id`),
+  CONSTRAINT `fk_party_entity` FOREIGN KEY (`portfolio_entity_id`) REFERENCES `entities` (`entity_id`),
   CONSTRAINT `fk_trans_trans_status` FOREIGN KEY (`transaction_status_id`) REFERENCES `transaction_statuses` (`transaction_status_id`),
-  CONSTRAINT `fk_trans_trans_type` FOREIGN KEY (`transaction_type_id`) REFERENCES `transaction_types` (`transaction_type_id`),
-  CONSTRAINT `fk_unit_entity` FOREIGN KEY (`unit_entity_id`) REFERENCES `entities` (`entity_id`)
+  CONSTRAINT `fk_trans_trans_type` FOREIGN KEY (`transaction_type_id`) REFERENCES `transaction_types` (`transaction_type_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -216,9 +264,10 @@ CREATE TABLE `users` (
   `email` varchar(255) NOT NULL,
   `preferences` json DEFAULT NULL,
   `primary_client_group_id` int DEFAULT NULL,
+  `update_date` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`user_id`),
   UNIQUE KEY `email` (`email`)
-) ENGINE=InnoDB AUTO_INCREMENT=235 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=236 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -249,6 +298,42 @@ CREATE TABLE `users` (
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
+
+--
+-- Final view structure for view `currencies`
+--
+
+/*!50001 DROP VIEW IF EXISTS `currencies`*/;
+/*!50001 SET @saved_cs_client          = @@character_set_client */;
+/*!50001 SET @saved_cs_results         = @@character_set_results */;
+/*!50001 SET @saved_col_connection     = @@collation_connection */;
+/*!50001 SET character_set_client      = utf8mb4 */;
+/*!50001 SET character_set_results     = utf8mb4 */;
+/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
+/*!50001 CREATE ALGORITHM=UNDEFINED */
+/*!50013 DEFINER=`admin`@`%` SQL SECURITY DEFINER */
+/*!50001 VIEW `currencies` AS select `en`.`entity_id` AS `entity_id`,`en`.`name` AS `name`,`en`.`entity_type_id` AS `entity_type_id`,`en`.`attributes` AS `attributes`,`en`.`update_date` AS `update_date`,`en`.`updated_user_id` AS `updated_user_id` from (`entities` `en` left join `entity_types` `et` on((`en`.`entity_type_id` = `et`.`entity_type_id`))) where (`et`.`entity_category` = 'Currency') */;
+/*!50001 SET character_set_client      = @saved_cs_client */;
+/*!50001 SET character_set_results     = @saved_cs_results */;
+/*!50001 SET collation_connection      = @saved_col_connection */;
+
+--
+-- Final view structure for view `instruments`
+--
+
+/*!50001 DROP VIEW IF EXISTS `instruments`*/;
+/*!50001 SET @saved_cs_client          = @@character_set_client */;
+/*!50001 SET @saved_cs_results         = @@character_set_results */;
+/*!50001 SET @saved_col_connection     = @@collation_connection */;
+/*!50001 SET character_set_client      = utf8mb4 */;
+/*!50001 SET character_set_results     = utf8mb4 */;
+/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
+/*!50001 CREATE ALGORITHM=UNDEFINED */
+/*!50013 DEFINER=`admin`@`%` SQL SECURITY DEFINER */
+/*!50001 VIEW `instruments` AS select `en`.`entity_id` AS `entity_id`,`en`.`name` AS `name`,`en`.`entity_type_id` AS `entity_type_id`,`en`.`attributes` AS `attributes`,`en`.`update_date` AS `update_date`,`en`.`updated_user_id` AS `updated_user_id` from (`entities` `en` left join `entity_types` `et` on((`en`.`entity_type_id` = `et`.`entity_type_id`))) where (`et`.`entity_category` = 'Instrument') */;
+/*!50001 SET character_set_client      = @saved_cs_client */;
+/*!50001 SET character_set_results     = @saved_cs_results */;
+/*!50001 SET collation_connection      = @saved_col_connection */;
 SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -260,10 +345,10 @@ SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-09-22 13:37:33
+-- Dump completed on 2025-09-25 15:56:44
 -- =============================================================================
 -- OneBor Database Schema Export
--- Generated on: 2025-09-22 13:37:27
+-- Generated on: 2025-09-25 15:56:36
 -- Database: onebor
 -- Host: panda-db.cnqay066ma0a.us-east-2.rds.amazonaws.com:3306
 -- 

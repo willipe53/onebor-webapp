@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Stock Dividend",
+  "description": "Stock Dividend",
+  "type": "object",
+  "properties": {
+    "amount": {
+      "type": "string"
+    },
+    "underlying_instrument": {
+      "type": "string",
+      "enum": [
+        "instruments"
+      ]
+    },
+    "post_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "record_date": {
+      "type": "string",
+      "format": "date"
+    }
+  },
+  "required": [
+    "amount",
+    "currency_code"
+  ],
+  "additionalProperties": false,
+  "valid_instruments": [
+    "EQ"
+  ],
+  "valid_contra_groups": [
+    "IA"
+  ]
+}

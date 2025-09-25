@@ -12,6 +12,7 @@ import {
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import * as apiService from "../services/api";
+import { parseServerDate } from "../utils";
 import LoginDialog from "./LoginDialog";
 import SignupDialog from "./SignupDialog";
 import ErrorSnackbar from "./ErrorSnackbar";
@@ -224,7 +225,7 @@ const AcceptInvitation: React.FC = () => {
 
               // Validate invitation (check if expired/redeemed)
               const now = new Date();
-              const expiresAt = new Date(foundInvitation.expires_at);
+              const expiresAt = parseServerDate(foundInvitation.expires_at);
 
               if (now >= expiresAt) {
                 setError(

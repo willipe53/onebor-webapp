@@ -32,7 +32,7 @@ def lambda_handler(event, context):
         "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
         "Access-Control-Allow-Credentials": "true"
     }
-    
+
     # Handle preflight OPTIONS requests
     if event.get('httpMethod') == 'OPTIONS':
         return {
@@ -40,7 +40,7 @@ def lambda_handler(event, context):
             "headers": cors_headers,
             "body": ""
         }
-    
+
     conn = None
     try:
         # Parse input
@@ -52,7 +52,9 @@ def lambda_handler(event, context):
 
         # Extract user_id from the request (should be passed from frontend)
         user_id = body.get("user_id")
+        print(f"DEBUG: Extracted user_id: {user_id} (type: {type(user_id)})")
         if not user_id:
+            print("DEBUG: user_id is missing or falsy")
             return {
                 "statusCode": 400,
                 "headers": cors_headers,
@@ -62,14 +64,12 @@ def lambda_handler(event, context):
         entity_id = body.get("entity_id")
         name = body.get("name")
         entity_type_id = body.get("entity_type_id")
-        parent_entity_id = body.get("parent_entity_id")
         attributes = body.get("attributes")
 
         # Debug logging
         print(
             f"DEBUG: user_id={user_id}, entity_id={entity_id}, name={name}, entity_type_id={entity_type_id}")
-        print(
-            f"DEBUG: parent_entity_id={parent_entity_id}, attributes={attributes}")
+        print(f"DEBUG: attributes={attributes}")
 
         secrets = get_db_secret()
         conn = get_connection(secrets)
@@ -102,9 +102,6 @@ def lambda_handler(event, context):
                 if entity_type_id is not None:
                     updates.append("entity_type_id = %s")
                     params.append(entity_type_id)
-                if parent_entity_id is not None:
-                    updates.append("parent_entity_id = %s")
-                    params.append(parent_entity_id)
 
                 if attributes:
                     # Replace entire attributes JSON instead of using JSON_SET
@@ -125,6 +122,11 @@ def lambda_handler(event, context):
                 if not updates:
                     return {"statusCode": 400, "body": json.dumps({"error": "No fields to update"})}
 
+                # Always update the updated_user_id field
+                updates.append("updated_user_id = %s")
+                params.append(user_id)
+                print(f"DEBUG: Adding updated_user_id = {user_id} to update")
+
                 sql = f"UPDATE entities SET {', '.join(updates)} WHERE entity_id = %s"
                 params.append(entity_id)
 
@@ -134,9 +136,18 @@ def lambda_handler(event, context):
 
                 cursor.execute(sql, params)
                 rows_affected = cursor.rowcount
-                conn.commit()
+                print(
+                    f"DEBUG: SQL executed successfully, rows affected: {rows_affected}")
 
-                print(f"DEBUG: Rows affected: {rows_affected}")
+                # Check what was actually updated
+                cursor.execute(
+                    "SELECT entity_id, updated_user_id, update_date FROM entities WHERE entity_id = %s", (entity_id,))
+                result = cursor.fetchone()
+                print(
+                    f"DEBUG: After update - entity_id: {result['entity_id']}, updated_user_id: {result['updated_user_id']}, update_date: {result['update_date']}")
+
+                conn.commit()
+                print(f"DEBUG: Transaction committed")
 
                 if rows_affected == 0:
                     print(
@@ -172,7 +183,7 @@ def lambda_handler(event, context):
                     }
 
                 sql = """
-                    INSERT INTO entities (name, entity_type_id, parent_entity_id, attributes)
+                    INSERT INTO entities (name, entity_type_id, attributes, updated_user_id)
                     VALUES (%s, %s, %s, %s)
                 """
                 # Handle attributes for INSERT
@@ -192,8 +203,8 @@ def lambda_handler(event, context):
                     (
                         name,
                         entity_type_id,
-                        parent_entity_id,
                         attributes_value,
+                        user_id,
                     ),
                 )
                 conn.commit()

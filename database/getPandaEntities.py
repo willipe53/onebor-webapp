@@ -32,7 +32,7 @@ def lambda_handler(event, context):
         "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
         "Access-Control-Allow-Credentials": "true"
     }
-    
+
     # Handle preflight OPTIONS requests
     if event.get('httpMethod') == 'OPTIONS':
         return {
@@ -40,7 +40,7 @@ def lambda_handler(event, context):
             "headers": cors_headers,
             "body": ""
         }
-    
+
     conn = None
     try:
         # Parse incoming request body
@@ -64,7 +64,6 @@ def lambda_handler(event, context):
         entity_id = body.get("entity_id")
         name = body.get("name")
         entity_type_id = body.get("entity_type_id")
-        parent_entity_id = body.get("parent_entity_id")
         client_group_id = body.get("client_group_id")
         count_only = body.get("count_only", False)  # Default to False
 
@@ -113,9 +112,6 @@ def lambda_handler(event, context):
             if entity_type_id:
                 query += " AND e.entity_type_id = %s"
                 params.append(entity_type_id)
-            if parent_entity_id:
-                query += " AND e.parent_entity_id = %s"
-                params.append(parent_entity_id)
 
         with conn.cursor() as cursor:
             try:

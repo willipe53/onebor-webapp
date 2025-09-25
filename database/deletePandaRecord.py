@@ -100,11 +100,6 @@ def delete_entity(connection, record_id: int) -> Dict[str, Any]:
             """, (record_id,))
 
             # Update child entities to remove parent references
-            cursor.execute("""
-                UPDATE entities 
-                SET parent_entity_id = NULL 
-                WHERE parent_entity_id = %s
-            """, (record_id,))
 
             # Delete the entity itself
             cursor.execute("""
@@ -173,6 +168,50 @@ def delete_entity_type(connection, record_id: int) -> Dict[str, Any]:
         return {
             "success": False,
             "error": f"Failed to delete entity type: {str(e)}"
+        }
+
+
+def delete_transaction_type(connection, record_id: int) -> Dict[str, Any]:
+    """Delete a transaction type and handle foreign key constraints."""
+    try:
+        with connection.cursor() as cursor:
+            # Check if any transactions are using this transaction type
+            cursor.execute("""
+                SELECT COUNT(*) as count 
+                FROM transactions 
+                WHERE transaction_type_id = %s
+            """, (record_id,))
+
+            result = cursor.fetchone()
+            if result['count'] > 0:
+                return {
+                    "success": False,
+                    "error": f"Cannot delete transaction type {record_id}: {result['count']} transactions are still using it"
+                }
+
+            # Delete the transaction type
+            cursor.execute("""
+                DELETE FROM transaction_types 
+                WHERE transaction_type_id = %s
+            """, (record_id,))
+
+            if cursor.rowcount == 0:
+                return {
+                    "success": False,
+                    "message": f"Transaction type with ID {record_id} not found"
+                }
+
+            connection.commit()
+            return {
+                "success": True,
+                "message": f"Transaction type {record_id} deleted successfully"
+            }
+
+    except Exception as e:
+        connection.rollback()
+        return {
+            "success": False,
+            "error": f"Failed to delete transaction type: {str(e)}"
         }
 
 
@@ -289,6 +328,8 @@ def lambda_handler(event, context):
                 result = delete_entity(connection, int(record_id))
             elif record_type == "Entity Type":
                 result = delete_entity_type(connection, int(record_id))
+            elif record_type == "Transaction Type":
+                result = delete_transaction_type(connection, int(record_id))
             elif record_type == "User":
                 result = delete_user(connection, str(record_id))
             else:
@@ -297,7 +338,7 @@ def lambda_handler(event, context):
                     'headers': headers,
                     'body': json.dumps({
                         'success': False,
-                        'error': f'Unsupported record_type: {record_type}. Supported types: Client Group, Entity, Entity Type, User'
+                        'error': f'Unsupported record_type: {record_type}. Supported types: Client Group, Entity, Entity Type, Transaction Type, User'
                     })
                 }
 

@@ -42,6 +42,7 @@ def lambda_handler(event, context):
         client_group_id = body.get("client_group_id")
         # Array of entity_ids that should be in the group
         desired_entity_ids = body.get("entity_ids", [])
+        user_id = body.get("user_id")
 
         print(
             f"DEBUG: Received parameters - client_group_id: {client_group_id}, desired entities count: {len(desired_entity_ids)}")
@@ -54,6 +55,10 @@ def lambda_handler(event, context):
         if not isinstance(desired_entity_ids, list):
             return {"statusCode": 400, "headers": cors_headers,
                     "body": json.dumps({"error": "entity_ids must be an array"})}
+
+        if not user_id:
+            return {"statusCode": 400, "headers": cors_headers,
+                    "body": json.dumps({"error": "user_id is required for data protection"})}
 
         s = get_db_secret()
         conn = get_connection(s)
@@ -88,9 +93,9 @@ def lambda_handler(event, context):
 
                 # Add new entities
                 if to_add:
-                    insert_query = "INSERT INTO client_group_entities (client_group_id, entity_id) VALUES (%s, %s)"
+                    insert_query = "INSERT INTO client_group_entities (client_group_id, entity_id, updated_user_id) VALUES (%s, %s, %s)"
                     for entity_id in to_add:
-                        c.execute(insert_query, [client_group_id, entity_id])
+                        c.execute(insert_query, [client_group_id, entity_id, user_id])
                         added_count += c.rowcount
                         print(
                             f"DEBUG: Added entity {entity_id} to client group {client_group_id}")

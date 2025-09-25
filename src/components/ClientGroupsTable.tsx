@@ -405,11 +405,11 @@ const ClientGroupsTable: React.FC = () => {
                 justifyContent: "flex-start",
               },
               "& .MuiDataGrid-columnHeaders": {
-                backgroundColor: "rgba(25, 118, 210, 0.15) !important",
+                backgroundColor: "#f5f5f5 !important", // Solid light gray background
                 borderBottom: "1px solid rgba(25, 118, 210, 0.2) !important",
               },
               "& .MuiDataGrid-columnHeader": {
-                backgroundColor: "rgba(25, 118, 210, 0.15) !important",
+                backgroundColor: "#f5f5f5 !important", // Solid light gray background
                 display: "flex",
                 alignItems: "center",
               },

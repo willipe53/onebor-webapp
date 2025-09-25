@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as apiService from "../services/api";
+import { parseServerDate } from "../utils";
 
 interface ClientGroupOnboardingProps {
   open: boolean;
@@ -107,7 +108,7 @@ const ClientGroupOnboarding: React.FC<ClientGroupOnboardingProps> = ({
 
       // Check if invitation is expired
       const now = new Date();
-      const expiresAt = new Date(invitation.expires_at);
+      const expiresAt = parseServerDate(invitation.expires_at);
       if (now > expiresAt) {
         setError("This invitation has expired");
         return;

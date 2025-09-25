@@ -22,7 +22,7 @@ def lambda_handler(event, context):
         "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
         "Access-Control-Allow-Credentials": "true"
     }
-    
+
     # Handle preflight OPTIONS requests
     if event.get('httpMethod') == 'OPTIONS':
         return {
@@ -30,7 +30,7 @@ def lambda_handler(event, context):
             "headers": cors_headers,
             "body": ""
         }
-    
+
     conn = None
     try:
         body = event.get("body")
@@ -44,6 +44,9 @@ def lambda_handler(event, context):
         preferences = body.get("preferences")
         # For new groups, need to add creator as member
         user_id = body.get("user_id")
+        print(f"DEBUG: Extracted user_id: {user_id} (type: {type(user_id)})")
+        if not user_id:
+            print("DEBUG: user_id is missing or falsy")
 
         s = get_db_secret()
         conn = get_connection(s)
@@ -68,6 +71,11 @@ def lambda_handler(event, context):
                 return {"statusCode": 400, "headers": cors_headers,
                         "body": json.dumps({"error": "No fields to update"})}
 
+            # Always update the updated_user_id field
+            updates.append("updated_user_id = %s")
+            params.append(user_id)
+            print(f"DEBUG: Adding updated_user_id = {user_id} to update")
+
             q = f"UPDATE client_groups SET {', '.join(updates)} WHERE client_group_id = %s"
             params.append(client_group_id)
         else:
@@ -91,9 +99,33 @@ def lambda_handler(event, context):
 
             params = [name, preferences_json]
 
+        print(f"DEBUG: Executing SQL: {q}")
+        print(f"DEBUG: Parameters: {params}")
+
         with conn.cursor() as c:
             c.execute(q, params)
-            new_client_group_id = c.lastrowid
+
+            if client_group_id:
+                # This was an UPDATE operation
+                rows_affected = c.rowcount
+                print(f"DEBUG: Update affected {rows_affected} rows")
+
+                # Check what was actually updated
+                c.execute(
+                    "SELECT client_group_id, updated_user_id, update_date FROM client_groups WHERE client_group_id = %s", (client_group_id,))
+                result = c.fetchone()
+                if result:
+                    print(
+                        f"DEBUG: After update - client_group_id: {result['client_group_id']}, updated_user_id: {result['updated_user_id']}, update_date: {result['update_date']}")
+                else:
+                    print("DEBUG: No result found after update")
+
+                new_client_group_id = client_group_id
+            else:
+                # This was an INSERT operation
+                new_client_group_id = c.lastrowid
+                print(
+                    f"DEBUG: Inserted new client group with ID: {new_client_group_id}")
 
             # If this is a new client group, automatically add the creator as a member
             if not client_group_id and user_id:
@@ -101,6 +133,7 @@ def lambda_handler(event, context):
                 c.execute(membership_q, [new_client_group_id, user_id])
 
             conn.commit()
+            print(f"DEBUG: Transaction committed")
 
             # Return the client_group_id for reference
             result_id = client_group_id or new_client_group_id

@@ -1,9 +1,11 @@
 import { userPool } from "../config/cognito";
+import { getApiUrl, logApiUrl } from "../config/api";
 
 // Use proxy in development, direct API in production
-const API_BASE_URL = import.meta.env.DEV
-  ? "/api" // Development: use Vite proxy
-  : "https://api.onebor.com/panda"; // Production: direct API Gateway
+const API_BASE_URL = getApiUrl();
+
+// Log API URL usage for debugging
+logApiUrl("api.ts", API_BASE_URL);
 
 // Client Groups
 export interface ClientGroup {
@@ -92,6 +94,7 @@ export interface EntityType {
   name: string;
   short_label?: string;
   label_color?: string;
+  entity_category?: string;
   attributes_schema: any;
 }
 
@@ -100,6 +103,8 @@ export interface CreateEntityTypeRequest {
   attributes_schema: any;
   short_label?: string;
   label_color?: string;
+  entity_category?: string;
+  user_id?: number; // Required for data protection
 }
 
 export interface QueryEntityTypesRequest {
@@ -115,7 +120,6 @@ export interface Entity {
   entity_id: number;
   name: string;
   entity_type_id: number;
-  parent_entity_id: number | null;
   attributes: any;
 }
 
@@ -124,7 +128,6 @@ export interface CreateEntityRequest {
   client_group_id: number; // Required for data protection
   name: string;
   entity_type_id: number;
-  parent_entity_id?: number | null;
   attributes?: any;
 }
 
@@ -134,7 +137,6 @@ export interface UpdateEntityRequest {
   client_group_id?: number; // Required for creating new entities
   name?: string;
   entity_type_id?: number;
-  parent_entity_id?: number | null;
   attributes?: any;
 }
 
@@ -143,7 +145,6 @@ export interface QueryEntitiesRequest {
   entity_id?: number; // If passed, return only matching entity
   name?: string; // If ends with %, return all starting with string; else exact match
   entity_type_id?: number; // Filter by entity type
-  parent_entity_id?: number | null; // Filter by parent entity
 }
 
 export type QueryEntitiesResponse = Entity[];
@@ -412,7 +413,6 @@ export interface QueryEntityCountRequest {
   user_id: number;
   client_group_id?: number;
   entity_type_id?: number;
-  parent_entity_id?: number;
 }
 
 export const queryEntityCount = async (
@@ -567,4 +567,185 @@ export const parseApiError = (error: Error): string => {
 
   // Return the original message if no specific handling applies
   return message;
+};
+
+// Transaction Types
+export interface TransactionType {
+  transaction_type_id: number;
+  name: string;
+  properties?: any;
+  update_date?: string;
+  updated_user_id?: number;
+}
+
+export interface CreateTransactionTypeRequest {
+  name: string;
+  properties?: any;
+}
+
+export interface QueryTransactionTypesRequest {
+  count_only?: boolean;
+}
+
+export interface QueryTransactionTypesResponse extends Array<TransactionType> {}
+
+// Transaction Statuses
+export interface TransactionStatus {
+  transaction_status_id: number;
+  name: string;
+  update_date?: string;
+  updated_user_id?: number;
+}
+
+export interface CreateTransactionStatusRequest {
+  name: string;
+}
+
+export interface QueryTransactionStatusesRequest {
+  count_only?: boolean;
+}
+
+export interface QueryTransactionStatusesResponse
+  extends Array<TransactionStatus> {}
+
+// Transactions
+export interface Transaction {
+  transaction_id: number;
+  portfolio_entity_id: number;
+  counterparty_entity_id: number;
+  instrument_entity_id: number;
+  properties?: any;
+  transaction_status_id: number;
+  transaction_type_id: number;
+  update_date?: string;
+  updated_user_id?: number;
+}
+
+export interface CreateTransactionRequest {
+  portfolio_entity_id: number;
+  counterparty_entity_id: number;
+  instrument_entity_id: number;
+  properties?: any;
+  transaction_type_id: number;
+  transaction_status_id?: number;
+  user_id: number;
+}
+
+export interface UpdateTransactionRequest extends CreateTransactionRequest {
+  transaction_id?: number;
+}
+
+export interface QueryTransactionsRequest {
+  transaction_id?: number;
+  portfolio_entity_id?: number;
+  counterparty_entity_id?: number;
+  instrument_entity_id?: number;
+  transaction_type_id?: number;
+  transaction_status_id?: number;
+  count_only?: boolean;
+  requesting_user_id?: number;
+}
+
+export interface QueryTransactionsResponse extends Array<Transaction> {}
+
+// Transaction Type API Functions
+export const createTransactionType = async (
+  data: CreateTransactionTypeRequest
+): Promise<TransactionType> => {
+  return apiCall<TransactionType>("/create_transaction_type", data);
+};
+
+export const queryTransactionTypes = async (
+  data: QueryTransactionTypesRequest = {}
+): Promise<QueryTransactionTypesResponse> => {
+  return apiCall<QueryTransactionTypesResponse>("/get_transaction_types", data);
+};
+
+export const updateTransactionType = async (
+  data: CreateTransactionTypeRequest & { transaction_type_id?: number }
+): Promise<TransactionType> => {
+  return apiCall<TransactionType>("/update_transaction_type", data);
+};
+
+// Transaction Status API Functions
+export const createTransactionStatus = async (
+  data: CreateTransactionStatusRequest
+): Promise<TransactionStatus> => {
+  return apiCall<TransactionStatus>("/create_transaction_status", data);
+};
+
+export const queryTransactionStatuses = async (
+  data: QueryTransactionStatusesRequest = {}
+): Promise<QueryTransactionStatusesResponse> => {
+  return apiCall<QueryTransactionStatusesResponse>(
+    "/get_transaction_statuses",
+    data
+  );
+};
+
+export const updateTransactionStatus = async (
+  data: CreateTransactionStatusRequest & { transaction_status_id?: number }
+): Promise<TransactionStatus> => {
+  return apiCall<TransactionStatus>("/update_transaction_status", data);
+};
+
+// Transaction API Functions
+export const createTransaction = async (
+  data: CreateTransactionRequest
+): Promise<Transaction> => {
+  return apiCall<Transaction>("/create_transaction", data);
+};
+
+export const queryTransactions = async (
+  data: QueryTransactionsRequest = {}
+): Promise<QueryTransactionsResponse> => {
+  return apiCall<QueryTransactionsResponse>("/get_transactions", data);
+};
+
+export const updateTransaction = async (
+  data: UpdateTransactionRequest
+): Promise<Transaction> => {
+  return apiCall<Transaction>("/update_transaction", data);
+};
+
+// API Service
+export const apiService = {
+  // Client Groups
+  createClientGroup,
+  queryClientGroups,
+  updateClientGroup,
+  deleteRecord,
+
+  // Entities
+  createEntity,
+  queryEntities,
+  updateEntity,
+
+  // Entity Types
+  createEntityType,
+  queryEntityTypes,
+  updateEntityType,
+
+  // Users
+  queryUsers,
+  updateUser,
+
+  // Invitations
+  manageInvitation,
+  queryInvitationCount,
+
+  // Transaction Types
+  createTransactionType,
+  queryTransactionTypes,
+  updateTransactionType,
+
+  // Transaction Statuses
+  createTransactionStatus,
+  queryTransactionStatuses,
+  updateTransactionStatus,
+
+  // Transactions
+  createTransaction,
+  queryTransactions,
+  updateTransaction,
 };

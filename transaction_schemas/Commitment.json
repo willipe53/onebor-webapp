@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Commitment",
+  "description": "Commit capital to a private equity fund",
+  "type": "object",
+  "properties": {
+    "amount": {
+      "type": "string"
+    },
+    "currency_code": {
+      "type": "string",
+      "enum": [
+        "currencies"
+      ]
+    },
+    "expected_percent": {
+      "type": "string"
+    },
+    "expected_years": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "amount",
+    "currency_code"
+  ],
+  "additionalProperties": false,
+  "valid_instruments": [
+    "PEF"
+  ],
+  "valid_contra_groups": [
+    "[]"
+  ]
+}

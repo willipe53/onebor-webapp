@@ -241,6 +241,7 @@ export const InviteUserForm: React.FC<InviteUserFormProps> = ({
       action: "create",
       expires_at: formData.expiresAt!.toISOString(),
       client_group_id: formData.clientGroupId as number,
+      email_sent_to: formData.email,
     });
   };
 
@@ -257,7 +258,8 @@ export const InviteUserForm: React.FC<InviteUserFormProps> = ({
 This invitation will expire at ${expiresAtFormatted}.
 
 To accept your invitation, please click the link below:
-https://onebor.com/accept_invitation/${invitationCode}
+
+<https://onebor.com/accept_invitation/${invitationCode}>
 
 Alternatively, you can manually enter this invitation code: ${invitationCode}
 
