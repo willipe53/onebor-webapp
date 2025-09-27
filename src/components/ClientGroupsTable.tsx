@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -421,7 +421,12 @@ const ClientGroupsTable: React.FC = () => {
       {/* Edit Modal */}
       <Modal
         open={isModalOpen}
-        onClose={handleCloseModal}
+        onClose={() => {}} // Disable backdrop clicks
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            handleCloseModal();
+          }
+        }}
         aria-labelledby="edit-client-group-modal"
         aria-describedby="edit-client-group-form"
       >
@@ -452,4 +457,4 @@ const ClientGroupsTable: React.FC = () => {
   );
 };
 
-export default ClientGroupsTable;
+export default React.memo(ClientGroupsTable);

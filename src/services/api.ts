@@ -1,11 +1,9 @@
 import { userPool } from "../config/cognito";
-import { getApiUrl, logApiUrl } from "../config/api";
 
 // Use proxy in development, direct API in production
-const API_BASE_URL = getApiUrl();
-
-// Log API URL usage for debugging
-logApiUrl("api.ts", API_BASE_URL);
+const API_BASE_URL = import.meta.env.DEV
+  ? "/api" // Development: use Vite proxy
+  : "https://api.onebor.com/panda"; // Production: direct API Gateway
 
 // Client Groups
 export interface ClientGroup {
@@ -55,7 +53,6 @@ const getAuthToken = (): Promise<string | null> => {
 
 // Base API call function with auth
 const apiCall = async <T>(endpoint: string, data: any): Promise<T> => {
-  // console.log("🚀 apiCall - Starting call to:", endpoint);
   const token = await getAuthToken();
 
   if (!token) {
@@ -64,8 +61,6 @@ const apiCall = async <T>(endpoint: string, data: any): Promise<T> => {
   }
 
   const fullUrl = `${API_BASE_URL}${endpoint}`;
-  // console.log("📡 apiCall - Making request to:", fullUrl);
-  // console.log("📡 apiCall - Request data:", data);
 
   const response = await fetch(fullUrl, {
     method: "POST",
@@ -145,16 +140,12 @@ export interface QueryEntitiesRequest {
   entity_id?: number; // If passed, return only matching entity
   name?: string; // If ends with %, return all starting with string; else exact match
   entity_type_id?: number; // Filter by entity type
+  entity_category?: string; // Filter by entity category (e.g., "Instrument")
 }
 
 export type QueryEntitiesResponse = Entity[];
 
 // API functions
-export const createEntityType = async (
-  data: CreateEntityTypeRequest
-): Promise<EntityType> => {
-  return apiCall<EntityType>("/create_entity_type", data);
-};
 
 export const queryEntityTypes = async (
   data: QueryEntityTypesRequest
@@ -172,6 +163,17 @@ export const queryEntities = async (
   data: QueryEntitiesRequest
 ): Promise<QueryEntitiesResponse> => {
   return apiCall<QueryEntitiesResponse>("/get_entities", data);
+};
+
+// Convenience function to get entities by category
+export const queryEntitiesByCategory = async (
+  userId: number,
+  entityCategory: string
+): Promise<QueryEntitiesResponse> => {
+  return apiCall<QueryEntitiesResponse>("/get_entities", {
+    user_id: userId,
+    entity_category: entityCategory,
+  });
 };
 
 export const updateEntity = async (
@@ -612,7 +614,7 @@ export interface QueryTransactionStatusesResponse
 export interface Transaction {
   transaction_id: number;
   portfolio_entity_id: number;
-  counterparty_entity_id: number;
+  contra_entity_id: number;
   instrument_entity_id: number;
   properties?: any;
   transaction_status_id: number;
@@ -623,7 +625,7 @@ export interface Transaction {
 
 export interface CreateTransactionRequest {
   portfolio_entity_id: number;
-  counterparty_entity_id: number;
+  contra_entity_id: number;
   instrument_entity_id: number;
   properties?: any;
   transaction_type_id: number;
@@ -638,7 +640,7 @@ export interface UpdateTransactionRequest extends CreateTransactionRequest {
 export interface QueryTransactionsRequest {
   transaction_id?: number;
   portfolio_entity_id?: number;
-  counterparty_entity_id?: number;
+  contra_entity_id?: number;
   instrument_entity_id?: number;
   transaction_type_id?: number;
   transaction_status_id?: number;
@@ -649,12 +651,6 @@ export interface QueryTransactionsRequest {
 export interface QueryTransactionsResponse extends Array<Transaction> {}
 
 // Transaction Type API Functions
-export const createTransactionType = async (
-  data: CreateTransactionTypeRequest
-): Promise<TransactionType> => {
-  return apiCall<TransactionType>("/create_transaction_type", data);
-};
-
 export const queryTransactionTypes = async (
   data: QueryTransactionTypesRequest = {}
 ): Promise<QueryTransactionTypesResponse> => {
@@ -693,7 +689,7 @@ export const updateTransactionStatus = async (
 export const createTransaction = async (
   data: CreateTransactionRequest
 ): Promise<Transaction> => {
-  return apiCall<Transaction>("/create_transaction", data);
+  return apiCall<Transaction>("/update_transaction", data);
 };
 
 export const queryTransactions = async (
@@ -706,6 +702,14 @@ export const updateTransaction = async (
   data: UpdateTransactionRequest
 ): Promise<Transaction> => {
   return apiCall<Transaction>("/update_transaction", data);
+};
+
+export const deleteTransaction = async (
+  transactionId: number
+): Promise<void> => {
+  return apiCall<void>("/delete_transaction", {
+    transaction_id: transactionId,
+  });
 };
 
 // API Service
@@ -722,7 +726,6 @@ export const apiService = {
   updateEntity,
 
   // Entity Types
-  createEntityType,
   queryEntityTypes,
   updateEntityType,
 
@@ -735,7 +738,6 @@ export const apiService = {
   queryInvitationCount,
 
   // Transaction Types
-  createTransactionType,
   queryTransactionTypes,
   updateTransactionType,
 
@@ -748,4 +750,5 @@ export const apiService = {
   createTransaction,
   queryTransactions,
   updateTransaction,
+  deleteTransaction,
 };

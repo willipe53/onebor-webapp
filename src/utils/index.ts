@@ -181,3 +181,53 @@ export const prepareJsonForForm = (
     jsonString: JSON.stringify(parsedObject, null, 2),
   };
 };
+
+/**
+ * Number formatting utilities for user-friendly display
+ */
+
+/**
+ * Format a number with thousands separators (commas)
+ * Examples: 1000 -> "1,000", 1234567.89 -> "1,234,567.89"
+ */
+export const formatNumberWithCommas = (value: number | string): string => {
+  if (value === null || value === undefined || value === "") return "";
+
+  const numValue = typeof value === "string" ? parseFloat(value) : value;
+  if (isNaN(numValue)) return "";
+
+  return numValue.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+};
+
+/**
+ * Parse a formatted number string back to a number
+ * Removes commas and converts to number
+ * Examples: "1,000" -> 1000, "1,234,567.89" -> 1234567.89
+ */
+export const parseFormattedNumber = (value: string): number => {
+  if (!value) return 0;
+
+  // Remove commas and parse
+  const cleanValue = value.replace(/,/g, "");
+  const parsed = parseFloat(cleanValue);
+
+  return isNaN(parsed) ? 0 : parsed;
+};
+
+/**
+ * Format a number for display in forms (with commas)
+ * Handles both string and number inputs
+ */
+export const formatNumberForDisplay = (value: number | string): string => {
+  if (value === null || value === undefined || value === "") return "";
+
+  // If it's already a formatted string with commas, return as-is
+  if (typeof value === "string" && value.includes(",")) {
+    return value;
+  }
+
+  return formatNumberWithCommas(value);
+};

@@ -27,6 +27,8 @@ import {
   isValidEmail,
   formatDateForInput,
   prepareJsonForForm,
+  formatNumberForDisplay,
+  parseFormattedNumber,
 } from "../utils";
 import AceEditor from "react-ace";
 import "ace-builds/src-noconflict/mode-json";
@@ -400,6 +402,7 @@ const EntityForm: React.FC<EntityFormProps> = ({
     }
 
     setAttributesMode(newMode);
+    setIsDirty(true);
   };
 
   // Handle JSON editor changes
@@ -610,6 +613,7 @@ const EntityForm: React.FC<EntityFormProps> = ({
     setErrors({});
     setJsonAttributes("{}");
     setJsonError("");
+    setIsDirty(true);
   };
 
   const handleDynamicFieldChange = (key: string, value: any) => {
@@ -617,6 +621,9 @@ const EntityForm: React.FC<EntityFormProps> = ({
       ...prev,
       [key]: value,
     }));
+
+    // Mark form as dirty when dynamic fields change
+    setIsDirty(true);
 
     // Clear error for this field
     if (errors[key]) {
@@ -686,23 +693,35 @@ const EntityForm: React.FC<EntityFormProps> = ({
       );
     }
 
-    // Number field
+    // Number field with comma formatting
     if (field.type === "number" || field.type === "integer") {
+      const displayValue = formatNumberForDisplay(value);
+
       return (
         <Grid key={field.key}>
           <TextField
             fullWidth
             label={label}
-            type="number"
-            value={value}
-            onChange={(e) =>
-              handleDynamicFieldChange(
-                field.key,
-                e.target.value ? Number(e.target.value) : ""
-              )
-            }
+            type="text" // Use text type to allow commas
+            value={displayValue}
+            onChange={(e) => {
+              const numericValue = parseFormattedNumber(e.target.value);
+              handleDynamicFieldChange(field.key, numericValue);
+            }}
+            onBlur={(e) => {
+              // Format the field with commas when user tabs out
+              const numericValue = parseFormattedNumber(e.target.value);
+              const formattedValue = formatNumberForDisplay(numericValue);
+              handleDynamicFieldChange(field.key, numericValue);
+              // Update the display value to show formatting
+              e.target.value = formattedValue;
+            }}
             error={!!error}
             helperText={error}
+            inputProps={{
+              inputMode: "numeric",
+              pattern: "[0-9,]*\\.?[0-9]*", // Allow numbers, commas, and decimal points
+            }}
           />
         </Grid>
       );
@@ -840,7 +859,10 @@ const EntityForm: React.FC<EntityFormProps> = ({
           fullWidth
           label="Entity Name *"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            setIsDirty(true);
+          }}
           error={!!errors.name}
           helperText={errors.name}
           disabled={mutation.isPending}

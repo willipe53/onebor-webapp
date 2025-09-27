@@ -17,7 +17,7 @@ import { apiService } from "../services/api";
 interface Transaction {
   transaction_id: number;
   portfolio_entity_id: number;
-  counterparty_entity_id: number;
+  contra_entity_id: number;
   instrument_entity_id: number;
   properties?: any;
   transaction_status_id: number;
@@ -28,7 +28,7 @@ interface Transaction {
 
 interface CreateTransactionRequest {
   portfolio_entity_id: number;
-  counterparty_entity_id: number;
+  contra_entity_id: number;
   instrument_entity_id: number;
   properties?: any;
   transaction_type_id: number;
@@ -94,7 +94,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
 
   const [formData, setFormData] = useState({
     portfolio_entity_id: "",
-    counterparty_entity_id: "",
+    contra_entity_id: "",
     instrument_entity_id: "",
     transaction_type_id: "",
     transaction_status_id: "",
@@ -118,8 +118,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
     if (editingTransaction) {
       const newFormData = {
         portfolio_entity_id: editingTransaction.portfolio_entity_id.toString(),
-        counterparty_entity_id:
-          editingTransaction.counterparty_entity_id.toString(),
+        contra_entity_id: editingTransaction.contra_entity_id.toString(),
         instrument_entity_id:
           editingTransaction.instrument_entity_id.toString(),
         transaction_type_id: editingTransaction.transaction_type_id.toString(),
@@ -166,7 +165,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
       // Reset form for new transaction
       const newFormData = {
         portfolio_entity_id: "",
-        counterparty_entity_id: "",
+        contra_entity_id: "",
         instrument_entity_id: "",
         transaction_type_id: "",
         transaction_status_id: "",
@@ -299,7 +298,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
     const submitData = {
       user_id: dbUserId,
       portfolio_entity_id: parseInt(formData.portfolio_entity_id),
-      counterparty_entity_id: parseInt(formData.counterparty_entity_id),
+      contra_entity_id: parseInt(formData.contra_entity_id),
       instrument_entity_id: parseInt(formData.instrument_entity_id),
       transaction_type_id: parseInt(formData.transaction_type_id),
       transaction_status_id: parseInt(formData.transaction_status_id),
@@ -377,7 +376,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
           </Box>
         </Box>
 
-        {/* Line 2: Portfolio and Counterparty */}
+        {/* Line 2: Portfolio and contra */}
         <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
           <Autocomplete
             options={entities || []}
@@ -404,23 +403,17 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
             getOptionLabel={(option) => option.name}
             value={
               entities?.find(
-                (e) =>
-                  e.entity_id.toString() === formData.counterparty_entity_id
+                (e) => e.entity_id.toString() === formData.contra_entity_id
               ) || null
             }
             onChange={(_, newValue) =>
               handleInputChange(
-                "counterparty_entity_id",
+                "contra_entity_id",
                 newValue?.entity_id.toString() || ""
               )
             }
             renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Counterparty *"
-                required
-                fullWidth
-              />
+              <TextField {...params} label="contra *" required fullWidth />
             )}
             disabled={isLoading}
             sx={{ flex: 1 }}

@@ -129,9 +129,7 @@ const TransactionTypeForm: React.FC<TransactionTypeFormProps> = ({
   }, [editingTransactionType]);
 
   const mutation = useMutation({
-    mutationFn: editingTransactionType
-      ? apiService.updateTransactionType
-      : apiService.createTransactionType,
+    mutationFn: apiService.updateTransactionType,
     onSuccess: () => {
       if (!editingTransactionType) {
         // Reset form only for create mode
@@ -259,7 +257,8 @@ const TransactionTypeForm: React.FC<TransactionTypeFormProps> = ({
           flex: 1,
           display: "flex",
           flexDirection: "column",
-          overflow: "hidden",
+          overflow: "auto",
+          maxHeight: "90vh",
         }}
       >
         <Box
@@ -326,6 +325,7 @@ const TransactionTypeForm: React.FC<TransactionTypeFormProps> = ({
               flex: 1,
               overflow: "auto",
               pr: 1,
+              pb: 2,
             }}
           >
             <TextField

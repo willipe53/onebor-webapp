@@ -1,47 +1,67 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useCallback } from "react";
 import {
   Box,
   Typography,
   CircularProgress,
   TextField,
   Button,
-  Stack,
-  MenuItem,
   Chip,
   Modal,
   Autocomplete,
   Tooltip,
   IconButton,
 } from "@mui/material";
-import { Add, InfoOutlined } from "@mui/icons-material";
+import { Add, InfoOutlined, ArrowBack } from "@mui/icons-material";
 import { DataGrid } from "@mui/x-data-grid";
 import type {
   GridColDef,
   GridRenderCellParams,
   GridRowParams,
 } from "@mui/x-data-grid";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import * as apiService from "../services/api";
 import DynamicTransactionForm from "./DynamicTransactionForm";
 import TransactionTypesTable from "./TransactionTypesTable";
-import TransactionStatusesTable from "./TransactionStatusesTable";
-import { formatDatabaseTimestamp } from "../utils";
 
-interface TransactionsTableProps {
-  groupSelectionMode?: {
-    clientGroupId: number;
-    clientGroupName: string;
-    onFinish: (selectedTransactionIds: number[]) => void;
-    onCancel: () => void;
-  };
-}
+// Helper function for formatting properties
+const formatProperties = (properties: unknown) => {
+  if (!properties) return "";
+  try {
+    const parsed =
+      typeof properties === "string" ? JSON.parse(properties) : properties;
+    return Object.entries(parsed)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(", ");
+  } catch {
+    return String(properties);
+  }
+};
 
-const TransactionsTable: React.FC<TransactionsTableProps> = ({
-  groupSelectionMode,
-}) => {
+// Status mapping for consistent lookups
+const STATUS_MAP: Record<
+  number,
+  {
+    name: string;
+    color:
+      | "default"
+      | "primary"
+      | "secondary"
+      | "error"
+      | "info"
+      | "success"
+      | "warning";
+    variant: "filled" | "outlined";
+  }
+> = {
+  1: { name: "INCOMPLETE", color: "warning", variant: "filled" },
+  2: { name: "QUEUED", color: "info", variant: "filled" },
+  3: { name: "PROCESSED", color: "success", variant: "filled" },
+};
+
+const TransactionsTable: React.FC = () => {
   const { userId } = useAuth();
-  const queryClient = useQueryClient();
+  const formRef = useRef<{ handleDismissal: () => void }>(null);
 
   // Get current user's database ID
   const { data: currentUser } = useQuery({
@@ -68,8 +88,6 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
   >(undefined);
   const [isTransactionTypesModalOpen, setIsTransactionTypesModalOpen] =
     useState(false);
-  const [isTransactionStatusesModalOpen, setIsTransactionStatusesModalOpen] =
-    useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTransactionType, setSelectedTransactionType] = useState<
     number | null
@@ -77,6 +95,16 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
   const [selectedTransactionStatus, setSelectedTransactionStatus] = useState<
     number | null
   >(null);
+
+  // Memoize status options to prevent recreation on every render
+  const statusOptions = useMemo(
+    () => [
+      { id: 1, name: "INCOMPLETE" },
+      { id: 2, name: "QUEUED" },
+      { id: 3, name: "PROCESSED" },
+    ],
+    []
+  );
 
   // Fetch transactions
   const {
@@ -98,40 +126,23 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         throw new Error("No user ID available");
       }
 
-      const queryParams: apiService.QueryTransactionsRequest = {
+      const queryParams = {
         user_id: currentUser.user_id,
         client_group_id: currentUser.primary_client_group_id,
       };
 
-      console.log(
-        "🔍 TransactionsTable - Querying transactions with params:",
-        queryParams
-      );
-
-      try {
-        const result = await apiService.queryTransactions(queryParams);
-        console.log("🔍 TransactionsTable - API result:", result);
-        return result;
-      } catch (error) {
-        console.error("🔍 TransactionsTable - API error:", error);
-        throw error;
-      }
+      return await apiService.queryTransactions(queryParams as any);
     },
     enabled: !!currentUser?.user_id && !!currentUser?.primary_client_group_id,
-    staleTime: 0,
-    refetchOnMount: true,
+    staleTime: 30 * 1000, // 30 seconds - more responsive
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window regains focus
   });
 
   // Fetch transaction types for filter
   const { data: transactionTypes } = useQuery({
     queryKey: ["transaction-types"],
     queryFn: () => apiService.queryTransactionTypes({}),
-  });
-
-  // Fetch transaction statuses for filter
-  const { data: transactionStatuses } = useQuery({
-    queryKey: ["transaction-statuses"],
-    queryFn: () => apiService.queryTransactionStatuses({}),
   });
 
   // Fetch entities for display
@@ -141,32 +152,34 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
       apiService.queryEntities({
         user_id: currentUser!.user_id,
         client_group_id: currentUser!.primary_client_group_id,
-      }),
+      } as any),
     enabled: !!currentUser?.user_id && !!currentUser?.primary_client_group_id,
   });
 
-  // Process transactions data
+  // Create lookup maps for O(1) access
+  const entityMap = useMemo(() => {
+    if (!entities) return new Map();
+    return new Map(entities.map((entity) => [entity.entity_id, entity]));
+  }, [entities]);
+
+  const transactionTypeMap = useMemo(() => {
+    if (!transactionTypes) return new Map();
+    return new Map(
+      transactionTypes.map((type) => [type.transaction_type_id, type])
+    );
+  }, [transactionTypes]);
+
+  // Process transactions data with O(1) lookups
   const transactionsData = useMemo(() => {
     if (!rawTransactionsData || !entities) return [];
 
     let processedData = rawTransactionsData.map((transaction) => {
-      // Find entity names
-      const portfolioEntity = entities.find(
-        (e) => e.entity_id === transaction.portfolio_entity_id
-      );
-      const counterpartyEntity = entities.find(
-        (e) => e.entity_id === transaction.counterparty_entity_id
-      );
-      const instrumentEntity = entities.find(
-        (e) => e.entity_id === transaction.instrument_entity_id
-      );
-
-      // Find transaction type and status names
-      const transactionType = transactionTypes?.find(
-        (t) => t.transaction_type_id === transaction.transaction_type_id
-      );
-      const transactionStatus = transactionStatuses?.find(
-        (s) => s.transaction_status_id === transaction.transaction_status_id
+      // O(1) lookups instead of O(n) searches
+      const portfolioEntity = entityMap.get(transaction.portfolio_entity_id);
+      const contraEntity = entityMap.get(transaction.contra_entity_id);
+      const instrumentEntity = entityMap.get(transaction.instrument_entity_id);
+      const transactionType = transactionTypeMap.get(
+        transaction.transaction_type_id
       );
 
       return {
@@ -175,10 +188,9 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         portfolio_entity_id: transaction.portfolio_entity_id,
         portfolio_entity_name:
           portfolioEntity?.name || `Entity ${transaction.portfolio_entity_id}`,
-        counterparty_entity_id: transaction.counterparty_entity_id,
-        counterparty_entity_name:
-          counterpartyEntity?.name ||
-          `Entity ${transaction.counterparty_entity_id}`,
+        contra_entity_id: transaction.contra_entity_id,
+        contra_entity_name:
+          contraEntity?.name || `Entity ${transaction.contra_entity_id}`,
         instrument_entity_id: transaction.instrument_entity_id,
         instrument_entity_name:
           instrumentEntity?.name ||
@@ -188,9 +200,6 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         transaction_type_name:
           transactionType?.name || `Type ${transaction.transaction_type_id}`,
         transaction_status_id: transaction.transaction_status_id,
-        transaction_status_name:
-          transactionStatus?.name ||
-          `Status ${transaction.transaction_status_id}`,
         update_date: transaction.update_date,
         updated_user_id: transaction.updated_user_id,
       };
@@ -200,10 +209,10 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     if (searchTerm) {
       processedData = processedData.filter(
         (transaction) =>
-          transaction.party_entity_name
+          transaction.portfolio_entity_name
             .toLowerCase()
             .includes(searchTerm.toLowerCase()) ||
-          transaction.counterparty_entity_name
+          transaction.contra_entity_name
             .toLowerCase()
             .includes(searchTerm.toLowerCase()) ||
           transaction.instrument_entity_name
@@ -232,148 +241,127 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     return processedData;
   }, [
     rawTransactionsData,
-    entities,
-    transactionTypes,
-    transactionStatuses,
+    entityMap,
+    transactionTypeMap,
     searchTerm,
     selectedTransactionType,
     selectedTransactionStatus,
+    entities,
   ]);
 
-  const handleEdit = (transaction: apiService.Transaction) => {
+  const handleEdit = useCallback((transaction: apiService.Transaction) => {
     setEditingTransaction(transaction);
     setIsFormOpen(true);
-  };
+  }, []);
 
-  const handleCloseForm = () => {
+  const handleCloseForm = useCallback(() => {
     setIsFormOpen(false);
     setEditingTransaction(undefined);
-  };
+  }, []);
 
-  const handleFormSuccess = () => {
-    handleCloseForm();
-    refetch();
-  };
-
-  const formatProperties = (properties: any) => {
-    if (!properties) return "None";
-
-    let parsedProperties;
-
-    if (typeof properties === "string") {
-      try {
-        parsedProperties = JSON.parse(properties);
-      } catch {
-        return `Invalid JSON: ${properties.substring(0, 50)}...`;
-      }
-    } else if (typeof properties === "object") {
-      parsedProperties = properties;
-    } else {
-      return String(properties);
+  const handleFormDismissal = useCallback(() => {
+    // Call the form's dismissal handler if it exists
+    if (formRef.current?.handleDismissal) {
+      formRef.current.handleDismissal();
     }
+    // Close the modal
+    setIsFormOpen(false);
+    setEditingTransaction(undefined);
+  }, []);
 
-    try {
-      const entries = Object.entries(parsedProperties);
-      if (entries.length === 0) return "None";
+  // Memoized column definitions to prevent recreation on every render
+  const columns: GridColDef[] = useMemo(
+    () => [
+      {
+        field: "transaction_id",
+        headerName: "ID",
+        width: 80,
+        align: "center",
+        headerAlign: "center",
+        cellClassName: "centered-cell",
+        renderCell: (params: GridRenderCellParams) => (
+          <Typography variant="body2" fontWeight="bold">
+            {params.value}
+          </Typography>
+        ),
+      },
+      {
+        field: "portfolio_entity_name",
+        headerName: "Portfolio",
+        width: 150,
+        align: "center",
+        headerAlign: "center",
+        cellClassName: "centered-cell",
+      },
+      {
+        field: "contra_entity_name",
+        headerName: "Contra",
+        width: 150,
+        align: "center",
+        headerAlign: "center",
+        cellClassName: "centered-cell",
+      },
+      {
+        field: "instrument_entity_name",
+        headerName: "Instrument",
+        width: 150,
+        align: "center",
+        headerAlign: "center",
+        cellClassName: "centered-cell",
+      },
+      {
+        field: "transaction_type_name",
+        headerName: "Type",
+        width: 120,
+        align: "center",
+        headerAlign: "center",
+        cellClassName: "centered-cell",
+        renderCell: (params: GridRenderCellParams) => (
+          <Chip
+            label={params.value}
+            size="small"
+            color="primary"
+            variant="outlined"
+          />
+        ),
+      },
+      {
+        field: "transaction_status_name",
+        headerName: "Status",
+        width: 120,
+        align: "center",
+        headerAlign: "center",
+        cellClassName: "centered-cell",
+        renderCell: (params: GridRenderCellParams) => {
+          const statusId = params.row.transaction_status_id;
+          const statusInfo = STATUS_MAP[statusId] || STATUS_MAP[1]; // Default to INCOMPLETE
 
-      return entries
-        .map(([key, value]) => {
-          let valueType: string = typeof value;
-          let displayValue = String(value);
-
-          if (value === null) {
-            valueType = "null";
-            displayValue = "null";
-          } else if (Array.isArray(value)) {
-            valueType = "array";
-            displayValue = `[${value.length} items]`;
-          } else if (typeof value === "object") {
-            valueType = "object";
-            displayValue = "{...}";
-          } else if (typeof value === "string" && value.length > 20) {
-            displayValue = `${value.substring(0, 20)}...`;
-          }
-
-          return `${key}(${valueType}): ${displayValue}`;
-        })
-        .join(", ");
-    } catch {
-      return "Invalid properties";
-    }
-  };
-
-  const columns: GridColDef[] = [
-    {
-      field: "transaction_id",
-      headerName: "ID",
-      width: 80,
-      renderCell: (params: GridRenderCellParams) => (
-        <Typography variant="body2" fontWeight="bold">
-          {params.value}
-        </Typography>
-      ),
-    },
-    {
-      field: "portfolio_entity_name",
-      headerName: "Portfolio",
-      width: 150,
-      renderCell: (params: GridRenderCellParams) => (
-        <Typography variant="body2">{params.value}</Typography>
-      ),
-    },
-    {
-      field: "counterparty_entity_name",
-      headerName: "Counterparty",
-      width: 150,
-      renderCell: (params: GridRenderCellParams) => (
-        <Typography variant="body2">{params.value}</Typography>
-      ),
-    },
-    {
-      field: "instrument_entity_name",
-      headerName: "Instrument",
-      width: 150,
-      renderCell: (params: GridRenderCellParams) => (
-        <Typography variant="body2">{params.value}</Typography>
-      ),
-    },
-    {
-      field: "transaction_type_name",
-      headerName: "Type",
-      width: 120,
-      renderCell: (params: GridRenderCellParams) => (
-        <Chip
-          label={params.value}
-          size="small"
-          color="primary"
-          variant="outlined"
-        />
-      ),
-    },
-    {
-      field: "transaction_status_name",
-      headerName: "Status",
-      width: 120,
-      renderCell: (params: GridRenderCellParams) => (
-        <Chip
-          label={params.value}
-          size="small"
-          color="secondary"
-          variant="outlined"
-        />
-      ),
-    },
-    {
-      field: "properties",
-      headerName: "Properties",
-      width: 200,
-      renderCell: (params: GridRenderCellParams) => (
-        <Typography variant="body2" sx={{ fontSize: "0.75rem" }}>
-          {formatProperties(params.value)}
-        </Typography>
-      ),
-    },
-  ];
+          return (
+            <Chip
+              label={statusInfo.name}
+              size="small"
+              color={statusInfo.color}
+              variant={statusInfo.variant}
+            />
+          );
+        },
+      },
+      {
+        field: "properties",
+        headerName: "Properties",
+        width: 200,
+        align: "center",
+        headerAlign: "center",
+        cellClassName: "centered-cell",
+        renderCell: (params: GridRenderCellParams) => (
+          <Typography variant="body2" sx={{ fontSize: "0.75rem" }}>
+            {formatProperties(params.value)}
+          </Typography>
+        ),
+      },
+    ],
+    []
+  );
 
   if (isLoading) {
     return (
@@ -410,7 +398,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
         <Typography variant="h5">Transactions</Typography>
         <Tooltip
-          title="Transactions represent trades, transfers, or other financial activities between entities. Each transaction involves a party (buyer/seller), counterparty (other party), instrument (what was traded), and currency (denomination)."
+          title="Transactions represent trades, transfers, or other financial activities between entities. Each transaction involves a party (buyer/seller), contra (other party), instrument (what was traded), and currency (denomination)."
           placement="right"
           arrow
         >
@@ -471,38 +459,6 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
             </IconButton>
           </Tooltip>
         </Box>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: 1 }}>
-          <Button
-            variant="contained"
-            color="primary"
-            size="small"
-            onClick={() => setIsTransactionStatusesModalOpen(true)}
-            sx={{
-              borderRadius: "20px",
-              textTransform: "none",
-              fontWeight: 600,
-            }}
-          >
-            Trans Status
-          </Button>
-          <Tooltip
-            title="Manage transaction statuses. Transaction statuses track the state of transactions (e.g., Pending, Completed, Cancelled)."
-            placement="top"
-          >
-            <IconButton
-              size="small"
-              sx={{
-                color: "primary.main",
-                p: 0.25,
-                "&:hover": {
-                  backgroundColor: "rgba(25, 118, 210, 0.1)",
-                },
-              }}
-            >
-              <InfoOutlined fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Box>
       </Box>
 
       {/* Filters */}
@@ -519,9 +475,9 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
           options={transactionTypes || []}
           getOptionLabel={(option) => option.name}
           value={
-            transactionTypes?.find(
-              (t) => t.transaction_type_id === selectedTransactionType
-            ) || null
+            selectedTransactionType
+              ? transactionTypeMap.get(selectedTransactionType) || null
+              : null
           }
           onChange={(_, newValue) =>
             setSelectedTransactionType(newValue?.transaction_type_id || null)
@@ -537,26 +493,21 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
         />
         <Autocomplete
           size="small"
-          options={transactionStatuses || []}
+          options={statusOptions}
           getOptionLabel={(option) => option.name}
           value={
-            transactionStatuses?.find(
-              (s) => s.transaction_status_id === selectedTransactionStatus
-            ) || null
+            selectedTransactionStatus
+              ? statusOptions.find((s) => s.id === selectedTransactionStatus) ||
+                null
+              : null
           }
           onChange={(_, newValue) =>
-            setSelectedTransactionStatus(
-              newValue?.transaction_status_id || null
-            )
+            setSelectedTransactionStatus(newValue?.id || null)
           }
           renderInput={(params) => (
-            <TextField
-              {...params}
-              label="Transaction Status"
-              sx={{ minWidth: 150 }}
-            />
+            <TextField {...params} label="Status" sx={{ minWidth: 120 }} />
           )}
-          sx={{ minWidth: 200 }}
+          sx={{ minWidth: 150 }}
         />
       </Box>
 
@@ -583,6 +534,17 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
               backgroundColor: "#f5f5f5 !important",
               display: "flex",
               alignItems: "center",
+              justifyContent: "center",
+            },
+            "& .MuiDataGrid-cell": {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            },
+            "& .centered-cell": {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             },
           }}
           slots={{
@@ -617,7 +579,17 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
       </Box>
 
       {/* Transaction Form Modal */}
-      <Modal open={isFormOpen} onClose={handleCloseForm}>
+      <Modal
+        open={isFormOpen}
+        onClose={() => {}} // Disable backdrop clicks
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            handleFormDismissal();
+          }
+        }}
+        disableAutoFocus={false}
+        disableEnforceFocus={false}
+      >
         <Box
           sx={{
             position: "absolute",
@@ -635,63 +607,43 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
           }}
         >
           <DynamicTransactionForm
+            ref={formRef}
             editingTransaction={editingTransaction}
             onClose={handleCloseForm}
           />
         </Box>
       </Modal>
 
-      {/* Transaction Types Modal */}
-      <Modal
-        open={isTransactionTypesModalOpen}
-        onClose={() => setIsTransactionTypesModalOpen(false)}
-      >
+      {/* Transaction Types Full Screen View */}
+      {isTransactionTypesModalOpen && (
         <Box
           sx={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: "95%",
-            maxWidth: "1200px",
-            maxHeight: "90vh",
-            overflow: "auto",
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
             bgcolor: "background.paper",
-            borderRadius: 2,
-            boxShadow: 24,
-            p: 0,
+            zIndex: 1300,
+            overflow: "auto",
+            p: 2,
           }}
         >
+          <Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 2 }}>
+            <Button
+              variant="outlined"
+              onClick={() => setIsTransactionTypesModalOpen(false)}
+              startIcon={<ArrowBack />}
+            >
+              Back to Transactions
+            </Button>
+            <Typography variant="h5">Transaction Types</Typography>
+          </Box>
           <TransactionTypesTable />
         </Box>
-      </Modal>
-
-      {/* Transaction Statuses Modal */}
-      <Modal
-        open={isTransactionStatusesModalOpen}
-        onClose={() => setIsTransactionStatusesModalOpen(false)}
-      >
-        <Box
-          sx={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: "95%",
-            maxWidth: "1200px",
-            maxHeight: "90vh",
-            overflow: "auto",
-            bgcolor: "background.paper",
-            borderRadius: 2,
-            boxShadow: 24,
-            p: 0,
-          }}
-        >
-          <TransactionStatusesTable />
-        </Box>
-      </Modal>
+      )}
     </Box>
   );
 };
 
-export default TransactionsTable;
+export default React.memo(TransactionsTable);

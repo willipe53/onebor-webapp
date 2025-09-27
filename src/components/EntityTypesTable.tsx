@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -44,9 +44,6 @@ const EntityTypesTable: React.FC = () => {
   } = useQuery<QueryEntityTypesResponse>({
     queryKey: ["entity-types"],
     queryFn: async () => {
-      // console.log(
-      //   "🔍 EntityTypesTable - Starting API call to queryEntityTypes"
-      // );
       try {
         const result = await apiService.queryEntityTypes({});
         // console.log(
@@ -338,7 +335,12 @@ const EntityTypesTable: React.FC = () => {
       {/* Edit Modal */}
       <Modal
         open={isModalOpen}
-        onClose={handleCloseModal}
+        onClose={() => {}} // Disable backdrop clicks
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            handleCloseModal();
+          }
+        }}
         aria-labelledby="edit-entity-type-modal"
         aria-describedby="edit-entity-type-form"
       >
@@ -357,6 +359,7 @@ const EntityTypesTable: React.FC = () => {
             borderRadius: 2,
             boxShadow: 24,
             p: 0,
+            overflow: "hidden", // Ensure modal doesn't scroll
           }}
         >
           <EntityTypeForm
@@ -369,4 +372,4 @@ const EntityTypesTable: React.FC = () => {
   );
 };
 
-export default EntityTypesTable;
+export default React.memo(EntityTypesTable);

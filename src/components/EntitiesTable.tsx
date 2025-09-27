@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -23,6 +23,7 @@ import type {
 } from "@mui/x-data-grid";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import * as apiService from "../services/api";
 import EntityForm from "./EntityForm";
 import EntityTypesTable from "./EntityTypesTable";
@@ -699,7 +700,12 @@ const EntitiesTable: React.FC<EntitiesTableProps> = ({
       {/* Edit Modal */}
       <Modal
         open={isModalOpen}
-        onClose={handleCloseModal}
+        onClose={() => {}} // Disable backdrop clicks
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            handleCloseModal();
+          }
+        }}
         aria-labelledby="edit-entity-modal"
         aria-describedby="edit-entity-form"
       >
@@ -726,34 +732,36 @@ const EntitiesTable: React.FC<EntitiesTableProps> = ({
         </Box>
       </Modal>
 
-      {/* Entity Types Modal */}
-      <Modal
-        open={isEntityTypesModalOpen}
-        onClose={() => setIsEntityTypesModalOpen(false)}
-        aria-labelledby="entity-types-modal"
-        aria-describedby="entity-types-table"
-      >
+      {/* Entity Types Full Screen View */}
+      {isEntityTypesModalOpen && (
         <Box
           sx={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: "95%",
-            maxWidth: 1200,
-            height: "90vh",
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
             bgcolor: "background.paper",
-            borderRadius: 2,
-            boxShadow: 24,
-            p: 0,
-            overflow: "hidden",
+            zIndex: 1300,
+            overflow: "auto",
+            p: 2,
           }}
         >
+          <Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 2 }}>
+            <Button
+              variant="outlined"
+              onClick={() => setIsEntityTypesModalOpen(false)}
+              startIcon={<ArrowBackIcon />}
+            >
+              Back to Entities
+            </Button>
+            <Typography variant="h5">Entity Types</Typography>
+          </Box>
           <EntityTypesTable />
         </Box>
-      </Modal>
+      )}
     </Box>
   );
 };
 
-export default EntitiesTable;
+export default React.memo(EntitiesTable);

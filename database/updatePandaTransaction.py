@@ -2,6 +2,7 @@ import boto3
 import json
 import pymysql
 import os
+import uuid
 from typing import Dict, Any, List, Optional
 
 # CORS headers
@@ -31,6 +32,48 @@ def get_db_connection():
     )
 
 
+def send_to_sqs(transaction_data: Dict[str, Any], operation: str) -> bool:
+    """Send transaction data to SQS FIFO queue."""
+    try:
+        sqs = boto3.client('sqs', region_name='us-east-2')
+        queue_url = "https://sqs.us-east-2.amazonaws.com/316490106381/pandatransactions.fifo"
+
+        # Prepare message body
+        message_body = {
+            "operation": operation,  # "create" or "update"
+            "transaction_id": transaction_data.get("transaction_id"),
+            "portfolio_entity_id": transaction_data.get("portfolio_entity_id"),
+            "contra_entity_id": transaction_data.get("contra_entity_id"),
+            "instrument_entity_id": transaction_data.get("instrument_entity_id"),
+            "transaction_type_id": transaction_data.get("transaction_type_id"),
+            "transaction_status_id": transaction_data.get("transaction_status_id"),
+            "properties": transaction_data.get("properties"),
+            "updated_user_id": transaction_data.get("updated_user_id"),
+            "timestamp": transaction_data.get("timestamp")
+        }
+
+        # Generate unique message group ID and deduplication ID
+        message_group_id = f"transaction-{transaction_data.get('transaction_id', 'new')}"
+        message_deduplication_id = f"{operation}-{transaction_data.get('transaction_id', uuid.uuid4())}-{int(os.urandom(4).hex(), 16)}"
+
+        print(
+            f"DEBUG: Sending to SQS - Group ID: {message_group_id}, Dedup ID: {message_deduplication_id}")
+
+        response = sqs.send_message(
+            QueueUrl=queue_url,
+            MessageBody=json.dumps(message_body),
+            MessageGroupId=message_group_id,
+            MessageDeduplicationId=message_deduplication_id
+        )
+
+        print(f"DEBUG: SQS message sent successfully: {response['MessageId']}")
+        return True
+
+    except Exception as e:
+        print(f"ERROR: Failed to send message to SQS: {str(e)}")
+        return False
+
+
 def lambda_handler(event, context):
     """Lambda handler for creating/updating transactions."""
     print(f"DEBUG: Event: {event}")
@@ -48,11 +91,14 @@ def lambda_handler(event, context):
         user_id = body.get("user_id")
         transaction_id = body.get("transaction_id")
         portfolio_entity_id = body.get("portfolio_entity_id")
-        counterparty_entity_id = body.get("counterparty_entity_id")
+        contra_entity_id = body.get("contra_entity_id")
         instrument_entity_id = body.get("instrument_entity_id")
         transaction_type_id = body.get("transaction_type_id")
         transaction_status_id = body.get("transaction_status_id")
         properties = body.get("properties")
+
+        print(
+            f"DEBUG: Extracted transaction_status_id: {transaction_status_id} (type: {type(transaction_status_id)})")
 
         # Validate required fields
         if not user_id:
@@ -82,9 +128,9 @@ def lambda_handler(event, context):
                     if portfolio_entity_id is not None:
                         updates.append("portfolio_entity_id = %s")
                         params.append(portfolio_entity_id)
-                    if counterparty_entity_id is not None:
-                        updates.append("counterparty_entity_id = %s")
-                        params.append(counterparty_entity_id)
+                    if contra_entity_id is not None:
+                        updates.append("contra_entity_id = %s")
+                        params.append(contra_entity_id)
                     if instrument_entity_id is not None:
                         updates.append("instrument_entity_id = %s")
                         params.append(instrument_entity_id)
@@ -94,6 +140,8 @@ def lambda_handler(event, context):
                     if transaction_status_id is not None:
                         updates.append("transaction_status_id = %s")
                         params.append(transaction_status_id)
+                        print(
+                            f"DEBUG: Adding transaction_status_id to update: {transaction_status_id} (type: {type(transaction_status_id)})")
                     if properties is not None:
                         # Convert properties to JSON string if it's a dict
                         if isinstance(properties, dict):
@@ -120,6 +168,11 @@ def lambda_handler(event, context):
 
                     print(f"DEBUG: Update SQL: {sql}")
                     print(f"DEBUG: Update params: {params}")
+                    print(
+                        f"DEBUG: transaction_status_id in params: {transaction_status_id in params}")
+                    if transaction_status_id in params:
+                        print(
+                            f"DEBUG: transaction_status_id value in params: {params[params.index(transaction_status_id)]}")
 
                     cursor.execute(sql, params)
 
@@ -131,6 +184,28 @@ def lambda_handler(event, context):
                         }
 
                     conn.commit()
+
+                    # Send to SQS after successful update (only for QUEUED transactions)
+                    if transaction_status_id == 2:  # QUEUED status
+                        transaction_data = {
+                            "transaction_id": transaction_id,
+                            "portfolio_entity_id": portfolio_entity_id,
+                            "contra_entity_id": contra_entity_id,
+                            "instrument_entity_id": instrument_entity_id,
+                            "transaction_type_id": transaction_type_id,
+                            "transaction_status_id": transaction_status_id,
+                            "properties": properties,
+                            "updated_user_id": user_id,
+                            "timestamp": context.aws_request_id if context else None
+                        }
+
+                        sqs_success = send_to_sqs(transaction_data, "update")
+                        if not sqs_success:
+                            print(
+                                "WARNING: Failed to send update message to SQS, but transaction was updated successfully")
+                    else:
+                        print(
+                            f"DEBUG: Transaction {transaction_id} updated to status {transaction_status_id}, not sending to SQS")
 
                     return {
                         "statusCode": 200,
@@ -167,7 +242,7 @@ def lambda_handler(event, context):
                     sql = """
                         INSERT INTO transactions (
                             portfolio_entity_id, 
-                            counterparty_entity_id, 
+                            contra_entity_id, 
                             instrument_entity_id, 
                             transaction_type_id, 
                             transaction_status_id, 
@@ -178,7 +253,7 @@ def lambda_handler(event, context):
 
                     params = [
                         portfolio_entity_id,
-                        counterparty_entity_id,
+                        contra_entity_id,
                         instrument_entity_id,
                         transaction_type_id,
                         transaction_status_id,
@@ -193,6 +268,28 @@ def lambda_handler(event, context):
                     new_transaction_id = cursor.lastrowid
 
                     conn.commit()
+
+                    # Send to SQS after successful creation (only for QUEUED transactions)
+                    if transaction_status_id == 2:  # QUEUED status
+                        transaction_data = {
+                            "transaction_id": new_transaction_id,
+                            "portfolio_entity_id": portfolio_entity_id,
+                            "contra_entity_id": contra_entity_id,
+                            "instrument_entity_id": instrument_entity_id,
+                            "transaction_type_id": transaction_type_id,
+                            "transaction_status_id": transaction_status_id,
+                            "properties": properties,
+                            "updated_user_id": user_id,
+                            "timestamp": context.aws_request_id if context else None
+                        }
+
+                        sqs_success = send_to_sqs(transaction_data, "create")
+                        if not sqs_success:
+                            print(
+                                "WARNING: Failed to send create message to SQS, but transaction was created successfully")
+                    else:
+                        print(
+                            f"DEBUG: Transaction {new_transaction_id} created with status {transaction_status_id}, not sending to SQS")
 
                     return {
                         "statusCode": 200,

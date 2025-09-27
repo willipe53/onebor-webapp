@@ -26,7 +26,7 @@ def test_insert_transaction():
     # Test payload
     test_payload = {
         "party_entity_id": 1,
-        "counterparty_entity_id": 2,
+        "contra_entity_id": 2,
         "unit_entity_id": 3,
         "quantity": 100.0,
         "price": 25.50,
@@ -71,7 +71,7 @@ def test_insert_transaction():
                     print(f"   Transaction ID: {body.get('transaction_id')}")
                     print(f"   Party Entity ID: {body.get('party_entity_id')}")
                     print(
-                        f"   Counterparty Entity ID: {body.get('counterparty_entity_id')}")
+                        f"   contra Entity ID: {body.get('contra_entity_id')}")
                     print(f"   Unit Entity ID: {body.get('unit_entity_id')}")
                     print(f"   Quantity: {body.get('quantity')}")
                     print(f"   Price: {body.get('price')}")

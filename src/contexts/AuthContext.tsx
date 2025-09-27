@@ -6,14 +6,12 @@ import {
   CognitoUserAttribute,
 } from "amazon-cognito-identity-js";
 import { userPool } from "../config/cognito";
-import * as apiService from "../services/api";
 
 interface AuthContextType {
   user: CognitoUser | null;
   userEmail: string | null;
   userName: string | null;
   userId: string | null;
-  dbUserId: number | null; // Database user_id
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -47,32 +45,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [dbUserId, setDbUserId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Helper function to fetch and store database user_id
-  const fetchAndStoreDbUserId = async (cognitoSub: string) => {
-    try {
-      const users = await apiService.queryUsers({ sub: cognitoSub });
-      if (users && users.length > 0) {
-        const databaseUserId = users[0].user_id;
-        setDbUserId(databaseUserId);
-        // Store in session storage for API calls
-        sessionStorage.setItem("dbUserId", databaseUserId.toString());
-        console.log("✅ Database user_id fetched and stored:", databaseUserId);
-      }
-    } catch (error) {
-      console.error("❌ Failed to fetch database user_id:", error);
-    }
-  };
-
   useEffect(() => {
-    // Initialize dbUserId from session storage if available
-    const storedDbUserId = sessionStorage.getItem("dbUserId");
-    if (storedDbUserId) {
-      setDbUserId(parseInt(storedDbUserId, 10));
-    }
-
     // Check if user is already logged in
     const currentUser = userPool.getCurrentUser();
     if (currentUser) {
@@ -93,8 +68,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               ""
           );
           setUserId(payload.sub);
-          // Fetch database user_id
-          fetchAndStoreDbUserId(payload.sub);
         }
         setIsLoading(false);
       });
@@ -128,8 +101,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               ""
           );
           setUserId(payload.sub);
-          // Fetch database user_id
-          fetchAndStoreDbUserId(payload.sub);
           resolve();
         },
         onFailure: (err) => {
@@ -262,9 +233,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUserEmail(null);
     setUserName(null);
     setUserId(null);
-    setDbUserId(null);
-    // Clear from session storage
-    sessionStorage.removeItem("dbUserId");
   };
 
   const value: AuthContextType = {
@@ -272,7 +240,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     userEmail,
     userName,
     userId,
-    dbUserId,
     isAuthenticated: !!user,
     isLoading,
     login,

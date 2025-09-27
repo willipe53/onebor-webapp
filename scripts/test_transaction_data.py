@@ -61,7 +61,7 @@ def test_with_real_data():
     # Use the first 3 entities
     test_payload = {
         "party_entity_id": entities[0]['entity_id'],
-        "counterparty_entity_id": entities[1]['entity_id'],
+        "contra_entity_id": entities[1]['entity_id'],
         "unit_entity_id": entities[2]['entity_id'],
         "quantity": 50.0,
         "price": 100.25,
@@ -75,7 +75,7 @@ def test_with_real_data():
     print(f"📡 Using entities:")
     print(f"   Party: {entities[0]['name']} (ID: {entities[0]['entity_id']})")
     print(
-        f"   Counterparty: {entities[1]['name']} (ID: {entities[1]['entity_id']})")
+        f"   contra: {entities[1]['name']} (ID: {entities[1]['entity_id']})")
     print(f"   Unit: {entities[2]['name']} (ID: {entities[2]['entity_id']})")
     print()
 

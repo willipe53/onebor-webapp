@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -33,12 +33,6 @@ const InvitationsTable: React.FC = () => {
     select: (data) => data[0], // Get first user from array
   });
 
-  // console.log("🔍 InvitationsTable - Current user:", currentUser);
-  // console.log(
-  //   "🔍 InvitationsTable - Primary client group ID:",
-  //   currentUser?.primary_client_group_id
-  // );
-
   // Get all client groups the user belongs to for debugging
   const { data: userClientGroups } = useQuery({
     queryKey: ["client-groups", currentUser?.user_id],
@@ -46,8 +40,6 @@ const InvitationsTable: React.FC = () => {
       apiService.queryClientGroups({ user_id: currentUser!.user_id }),
     enabled: !!currentUser?.user_id,
   });
-
-  // console.log("🔍 InvitationsTable - User's client groups:", userClientGroups);
 
   // Get primary client group details (including name)
   const { data: primaryClientGroup } = useQuery({
@@ -69,17 +61,10 @@ const InvitationsTable: React.FC = () => {
       const allInvitations = [];
       for (const group of userClientGroups) {
         try {
-          // console.log(
-          //   `🔍 Fetching invitations for group ${group.client_group_id} (${group.name})`
-          // );
           const invitations = await apiService.manageInvitation({
             action: "get",
             client_group_id: group.client_group_id,
           });
-          // console.log(
-          //   `🔍 Group ${group.client_group_id} invitations:`,
-          //   invitations
-          // );
 
           if (Array.isArray(invitations)) {
             allInvitations.push(
@@ -100,11 +85,6 @@ const InvitationsTable: React.FC = () => {
     enabled: !!userClientGroups && userClientGroups.length > 0,
   });
 
-  // console.log(
-  //   "🔍 InvitationsTable - All invitations across all groups:",
-  //   debugInvitations
-  // );
-
   // Fetch invitations for the user's client group
   const {
     data: rawInvitationsData,
@@ -114,39 +94,26 @@ const InvitationsTable: React.FC = () => {
   } = useQuery({
     queryKey: ["invitations", currentUser?.primary_client_group_id],
     queryFn: () => {
-      // console.log(
-      //   "🔍 InvitationsTable - Fetching invitations for client_group_id:",
-      //   currentUser!.primary_client_group_id
-      // );
       return apiService.manageInvitation({
         action: "get",
         client_group_id: currentUser!.primary_client_group_id!,
       });
     },
+    staleTime: 30 * 1000, // 30 seconds
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
     enabled: !!currentUser?.primary_client_group_id,
   });
-
-  // console.log(
-  //   "🔍 InvitationsTable - Raw invitations data:",
-  //   rawInvitationsData
-  // );
-  // console.log("🔍 InvitationsTable - Is loading:", isLoading);
-  // console.log("🔍 InvitationsTable - Error:", error);
 
   // Mutation to expire an invitation
   const expireInvitationMutation = useMutation({
     mutationFn: (code: string) => {
-      // console.log("🔄 Calling manageInvitation with:", {
-      //   action: "redeem",
-      //   code,
-      // });
       return apiService.manageInvitation({
         action: "redeem", // This sets expires_at to NOW()
         code,
       });
     },
     onSuccess: () => {
-      // console.log("✅ Invitation expired successfully, refreshing table...");
       // Refresh the invitations list
       refetch();
       // Invalidate the count cache to update badges
@@ -161,17 +128,16 @@ const InvitationsTable: React.FC = () => {
     },
   });
 
-  // Transform array data to proper format
-  const invitationsData = React.useMemo(() => {
-    // console.log(
-    //   "🔍 InvitationsTable - Processing raw data:",
-    //   rawInvitationsData
-    // );
-    // console.log(
-    //   "🔍 InvitationsTable - Processing debug data:",
-    //   debugInvitations
-    // );
+  // Create client groups map for O(1) lookups
+  const clientGroupsMap = useMemo(() => {
+    if (!userClientGroups) return new Map();
+    return new Map(
+      userClientGroups.map((group) => [group.client_group_id, group.name])
+    );
+  }, [userClientGroups]);
 
+  // Transform array data to proper format
+  const invitationsData = useMemo(() => {
     // For now, use debugInvitations (all groups) if rawInvitationsData is empty
     const sourceData =
       rawInvitationsData &&
@@ -181,17 +147,11 @@ const InvitationsTable: React.FC = () => {
         : debugInvitations || [];
 
     if (!sourceData || (Array.isArray(sourceData) && sourceData.length === 0)) {
-      // console.log(
-      //   "🔍 InvitationsTable - No source data, returning empty array"
-      // );
       return [];
     }
 
     // Handle both array and object responses
     const dataArray = Array.isArray(sourceData) ? sourceData : [sourceData];
-
-    // console.log("🔍 InvitationsTable - Data array:", dataArray);
-    // console.log("🔍 InvitationsTable - Data array length:", dataArray.length);
 
     const processed = dataArray.map((invitation: any) => {
       // Parse server date (UTC) and compare with current time
@@ -202,19 +162,8 @@ const InvitationsTable: React.FC = () => {
       // Find the group name if not already included
       const groupName =
         invitation.group_name ||
-        userClientGroups?.find(
-          (group) => group.client_group_id === invitation.client_group_id
-        )?.name ||
+        clientGroupsMap.get(invitation.client_group_id) ||
         "Unknown";
-
-      // Debug logging (remove in production)
-      // console.log(
-      //   `📅 Invitation ${invitation.code}: expires_at=${
-      //     invitation.expires_at
-      //   } (server UTC), local=${formatLocalDateShort(
-      //     expiresAt
-      //   )}, isExpired=${isExpired}, group=${groupName}`
-      // );
 
       return {
         id: invitation.invitation_id,
@@ -229,12 +178,6 @@ const InvitationsTable: React.FC = () => {
       };
     });
 
-    // console.log("🔍 InvitationsTable - Processed invitations data:", processed);
-    // console.log(
-    //   "🔍 InvitationsTable - Processed data length:",
-    //   processed.length
-    // );
-
     // Apply filter based on the toggle
     const filteredProcessed =
       filter === "unexpired"
@@ -242,88 +185,94 @@ const InvitationsTable: React.FC = () => {
         : processed;
 
     return filteredProcessed;
-  }, [rawInvitationsData, debugInvitations, userClientGroups, filter]);
+  }, [rawInvitationsData, debugInvitations, clientGroupsMap, filter]);
 
-  const handleExpireInvitation = (code: string) => {
-    expireInvitationMutation.mutate(code);
-  };
+  const handleExpireInvitation = useCallback(
+    (code: string) => {
+      expireInvitationMutation.mutate(code);
+    },
+    [expireInvitationMutation]
+  );
 
-  const columns: GridColDef[] = [
-    {
-      field: "invitation_id",
-      headerName: "ID",
-      width: 80,
-      type: "number",
-      align: "left",
-      headerAlign: "left",
-    },
-    {
-      field: "code",
-      headerName: "Invitation Code",
-      width: 180,
-      renderCell: (params: GridRenderCellParams) => (
-        <Typography variant="body2" fontFamily="monospace">
-          {params.value}
-        </Typography>
-      ),
-    },
-    {
-      field: "group_name",
-      headerName: "Client Group",
-      width: 150,
-      renderCell: (params: GridRenderCellParams) => (
-        <Typography variant="body2">{params.value || "Unknown"}</Typography>
-      ),
-    },
-    {
-      field: "email_sent_to",
-      headerName: "Email Sent To",
-      width: 200,
-      renderCell: (params: GridRenderCellParams) => (
-        <Typography variant="body2">{params.value || "—"}</Typography>
-      ),
-    },
-    {
-      field: "expires_at_local",
-      headerName: "Expires At",
-      width: 220,
-      renderCell: (params: GridRenderCellParams) => {
-        const isExpired = params.row.isExpired;
-
-        return (
-          <Chip
-            label={params.value} // Already formatted in local time
-            color={isExpired ? "error" : "success"}
-            variant="outlined"
-            size="small"
-          />
-        );
+  const columns: GridColDef[] = useMemo(
+    () => [
+      {
+        field: "invitation_id",
+        headerName: "ID",
+        width: 80,
+        type: "number",
+        align: "left",
+        headerAlign: "left",
       },
-    },
-    {
-      field: "actions",
-      headerName: "Expire Code",
-      flex: 1,
-      sortable: false,
-      renderCell: (params: GridRenderCellParams) => {
-        const isExpired = params.row.isExpired;
-        const isExpiring = expireInvitationMutation.isPending;
-
-        return (
-          <Button
-            variant="outlined"
-            color="error"
-            size="small"
-            onClick={() => handleExpireInvitation(params.row.code)}
-            disabled={isExpired || isExpiring}
-            sx={{ minWidth: "140px" }}
-          >
-            {isExpired ? "Already Expired" : "Expire Invitation"}
-          </Button>
-        );
+      {
+        field: "code",
+        headerName: "Invitation Code",
+        width: 180,
+        renderCell: (params: GridRenderCellParams) => (
+          <Typography variant="body2" fontFamily="monospace">
+            {params.value}
+          </Typography>
+        ),
       },
-    },
-  ];
+      {
+        field: "group_name",
+        headerName: "Client Group",
+        width: 150,
+        renderCell: (params: GridRenderCellParams) => (
+          <Typography variant="body2">{params.value || "Unknown"}</Typography>
+        ),
+      },
+      {
+        field: "email_sent_to",
+        headerName: "Email Sent To",
+        width: 200,
+        renderCell: (params: GridRenderCellParams) => (
+          <Typography variant="body2">{params.value || "—"}</Typography>
+        ),
+      },
+      {
+        field: "expires_at_local",
+        headerName: "Expires At",
+        width: 220,
+        renderCell: (params: GridRenderCellParams) => {
+          const isExpired = params.row.isExpired;
+
+          return (
+            <Chip
+              label={params.value} // Already formatted in local time
+              color={isExpired ? "error" : "success"}
+              variant="outlined"
+              size="small"
+            />
+          );
+        },
+      },
+      {
+        field: "actions",
+        headerName: "Expire Code",
+        flex: 1,
+        sortable: false,
+        renderCell: (params: GridRenderCellParams) => {
+          const isExpired = params.row.isExpired;
+          const isExpiring = expireInvitationMutation.isPending;
+
+          return (
+            <Button
+              variant="outlined"
+              color="error"
+              size="small"
+              onClick={() => handleExpireInvitation(params.row.code)}
+              disabled={isExpired || isExpiring}
+              sx={{ minWidth: "140px" }}
+            >
+              {isExpired ? "Already Expired" : "Expire Invitation"}
+            </Button>
+          );
+        },
+      },
+    ],
+    []
+  );
 
   if (isLoading) {
     return (
@@ -472,4 +421,4 @@ const InvitationsTable: React.FC = () => {
   );
 };
 
-export default InvitationsTable;
+export default React.memo(InvitationsTable);

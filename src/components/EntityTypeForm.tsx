@@ -220,9 +220,7 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
   }, [editingEntityType]);
 
   const mutation = useMutation({
-    mutationFn: editingEntityType
-      ? apiService.updateEntityType
-      : apiService.createEntityType,
+    mutationFn: apiService.updateEntityType,
     onSuccess: () => {
       if (!editingEntityType) {
         // Reset form only for create mode
@@ -372,370 +370,366 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
     (editingEntityType?.entity_type_id ? isDirty : true); // For existing types, require dirty; for new types, always allow
 
   return (
-    <Box
-      sx={{ height: "100%", display: "flex", flexDirection: "column", p: 3 }}
+    <Paper
+      elevation={3}
+      sx={{
+        p: 4,
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
     >
-      <Paper
-        elevation={3}
+      <Box
         sx={{
-          p: 4,
-          flex: 1,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 2,
+        }}
+      >
+        <Typography variant="h4">
+          {editingEntityType ? "Edit Entity Type" : "Create Entity Type"}
+        </Typography>
+        {editingEntityType && (
+          <Chip
+            label={`ID: ${editingEntityType.entity_type_id}`}
+            size="small"
+            variant="outlined"
+            sx={{
+              backgroundColor: "rgba(25, 118, 210, 0.1)",
+              borderColor: "rgba(25, 118, 210, 0.5)",
+              color: "primary.main",
+              fontWeight: "500",
+            }}
+          />
+        )}
+      </Box>
+
+      {mutation.isError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Error:{" "}
+          {mutation.error?.message ||
+            `Failed to ${editingEntityType ? "update" : "create"} entity type`}
+        </Alert>
+      )}
+
+      {deleteMutation.isError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Error:{" "}
+          {deleteMutation.error?.message ||
+            `Failed to delete entity type "${editingEntityType?.name}"`}
+        </Alert>
+      )}
+
+      {mutation.isSuccess && !editingEntityType && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          Entity type created successfully!
+        </Alert>
+      )}
+
+      <form
+        style={{
+          height: "100%",
           display: "flex",
           flexDirection: "column",
-          overflow: "hidden",
+          minHeight: 0, // Allow flex child to shrink
         }}
+        onSubmit={handleSubmit}
       >
         <Box
           sx={{
             display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            mb: 2,
+            flexDirection: "column",
+            gap: 3,
+            flex: 1,
+            overflow: "auto",
+            pr: 1,
+            minHeight: 0, // Allow flex child to shrink
           }}
         >
-          <Typography variant="h4">
-            {editingEntityType ? "Edit Entity Type" : "Create Entity Type"}
-          </Typography>
-          {editingEntityType && (
-            <Chip
-              label={`ID: ${editingEntityType.entity_type_id}`}
-              size="small"
-              variant="outlined"
+          <TextField
+            label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            fullWidth
+            disabled={mutation.isPending}
+          />
+
+          <TextField
+            label="Entity Category"
+            value={entityCategory}
+            onChange={(e) => setEntityCategory(e.target.value)}
+            fullWidth
+            disabled={mutation.isPending}
+            helperText="Optional category for grouping entity types"
+          />
+
+          <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
+            <TextField
+              label="Short Label"
+              value={shortLabel}
+              onChange={(e) => setShortLabel(e.target.value)}
+              disabled={mutation.isPending}
+              inputProps={{ maxLength: 10 }}
+              sx={{ flex: 1 }}
+            />
+
+            <Box
               sx={{
-                backgroundColor: "rgba(25, 118, 210, 0.1)",
-                borderColor: "rgba(25, 118, 210, 0.5)",
-                color: "primary.main",
-                fontWeight: "500",
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                mt: 1,
+                position: "relative",
               }}
-            />
-          )}
-        </Box>
-
-        {mutation.isError && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            Error:{" "}
-            {mutation.error?.message ||
-              `Failed to ${
-                editingEntityType ? "update" : "create"
-              } entity type`}
-          </Alert>
-        )}
-
-        {deleteMutation.isError && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            Error:{" "}
-            {deleteMutation.error?.message ||
-              `Failed to delete entity type "${editingEntityType?.name}"`}
-          </Alert>
-        )}
-
-        {mutation.isSuccess && !editingEntityType && (
-          <Alert severity="success" sx={{ mb: 2 }}>
-            Entity type created successfully!
-          </Alert>
-        )}
-
-        <form
-          onSubmit={handleSubmit}
-          style={{ height: "100%", display: "flex", flexDirection: "column" }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 3,
-              flex: 1,
-              overflow: "auto",
-              pr: 1,
-            }}
-          >
-            <TextField
-              label="Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              fullWidth
-              disabled={mutation.isPending}
-            />
-
-            <TextField
-              label="Entity Category"
-              value={entityCategory}
-              onChange={(e) => setEntityCategory(e.target.value)}
-              fullWidth
-              disabled={mutation.isPending}
-              helperText="Optional category for grouping entity types"
-            />
-
-            <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
-              <TextField
-                label="Short Label"
-                value={shortLabel}
-                onChange={(e) => setShortLabel(e.target.value)}
-                disabled={mutation.isPending}
-                inputProps={{ maxLength: 10 }}
-                sx={{ flex: 1 }}
-              />
-
+            >
               <Box
                 sx={{
-                  flex: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                  mt: 1,
-                  position: "relative",
+                  width: 40,
+                  height: 40,
+                  backgroundColor: labelColor,
+                  border: "2px solid #ccc",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  transition: "border-color 0.2s",
+                  "&:hover": {
+                    borderColor: "#999",
+                  },
                 }}
-              >
+                onClick={() => setShowColorPicker(!showColorPicker)}
+              />
+              <Typography variant="caption" color="text.secondary">
+                Click to change color
+              </Typography>
+              {showColorPicker && (
                 <Box
                   sx={{
-                    width: 40,
-                    height: 40,
-                    backgroundColor: labelColor,
-                    border: "2px solid #ccc",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    flexShrink: 0,
-                    transition: "border-color 0.2s",
-                    "&:hover": {
-                      borderColor: "#999",
-                    },
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    mt: 1,
+                    p: 2,
+                    border: "1px solid #ccc",
+                    borderRadius: 1,
+                    backgroundColor: "white",
+                    boxShadow: 3,
+                    zIndex: 1000,
                   }}
-                  onClick={() => setShowColorPicker(!showColorPicker)}
-                />
-                <Typography variant="caption" color="text.secondary">
-                  Click to change color
-                </Typography>
-                {showColorPicker && (
+                >
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ mb: 1, display: "block" }}
+                  >
+                    Select color:
+                  </Typography>
                   <Box
                     sx={{
-                      position: "absolute",
-                      top: "100%",
-                      left: 0,
-                      mt: 1,
-                      p: 2,
-                      border: "1px solid #ccc",
-                      borderRadius: 1,
-                      backgroundColor: "white",
-                      boxShadow: 3,
-                      zIndex: 1000,
+                      display: "grid",
+                      gridTemplateColumns: "repeat(4, 1fr)",
+                      gap: 0.5,
+                      maxWidth: 200,
                     }}
                   >
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ mb: 1, display: "block" }}
-                    >
-                      Select color:
-                    </Typography>
-                    <Box
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(4, 1fr)",
-                        gap: 0.5,
-                        maxWidth: 200,
-                      }}
-                    >
-                      {COLOR_PALETTE.map((color) => (
-                        <Box
-                          key={color}
-                          sx={{
-                            width: 40,
-                            height: 40,
-                            backgroundColor: color,
-                            border:
-                              labelColor === color
-                                ? "3px solid #000"
-                                : "2px solid #ccc",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            transition: "all 0.2s",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            "&:hover": {
-                              borderColor: "#666",
-                              transform: "scale(1.05)",
-                            },
-                          }}
-                          onClick={() => {
-                            setLabelColor(color);
-                            setShowColorPicker(false);
-                          }}
-                        >
-                          {labelColor === color && (
-                            <Typography
-                              sx={{
-                                color: "white",
-                                fontSize: "16px",
-                                fontWeight: "bold",
-                                textShadow: "1px 1px 2px rgba(0,0,0,0.7)",
-                              }}
-                            >
-                              ✓
-                            </Typography>
-                          )}
-                        </Box>
-                      ))}
-                    </Box>
-                    <Box sx={{ mt: 1, textAlign: "center" }}>
-                      <Button
-                        size="small"
-                        onClick={() => setShowColorPicker(false)}
+                    {COLOR_PALETTE.map((color) => (
+                      <Box
+                        key={color}
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          backgroundColor: color,
+                          border:
+                            labelColor === color
+                              ? "3px solid #000"
+                              : "2px solid #ccc",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          "&:hover": {
+                            borderColor: "#666",
+                            transform: "scale(1.05)",
+                          },
+                        }}
+                        onClick={() => {
+                          setLabelColor(color);
+                          setShowColorPicker(false);
+                        }}
                       >
-                        Close
-                      </Button>
-                    </Box>
+                        {labelColor === color && (
+                          <Typography
+                            sx={{
+                              color: "white",
+                              fontSize: "16px",
+                              fontWeight: "bold",
+                              textShadow: "1px 1px 2px rgba(0,0,0,0.7)",
+                            }}
+                          >
+                            ✓
+                          </Typography>
+                        )}
+                      </Box>
+                    ))}
                   </Box>
-                )}
-              </Box>
-            </Box>
-
-            <FormControl fullWidth>
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  mb: 1,
-                }}
-              >
-                <FormLabel>Attributes Schema (JSON) *</FormLabel>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={formatJson}
-                  disabled={mutation.isPending || isJsonAlreadyFormatted()}
-                  sx={{ minWidth: "auto", px: 2 }}
-                >
-                  Format JSON
-                </Button>
-              </Box>
-              <Box
-                sx={{
-                  border: jsonError ? "2px solid #f44336" : "1px solid #ccc",
-                  borderRadius: 1,
-                  height: 300,
-                  overflow: "auto",
-                  backgroundColor: "#fafafa",
-                }}
-              >
-                <AceEditor
-                  mode="json"
-                  theme="github"
-                  value={attributesSchema}
-                  onChange={handleJsonChange}
-                  name="json-schema-editor"
-                  width="100%"
-                  height="300px"
-                  fontSize={14}
-                  showPrintMargin={false}
-                  showGutter={true}
-                  highlightActiveLine={true}
-                  setOptions={{
-                    enableBasicAutocompletion: true,
-                    enableLiveAutocompletion: true,
-                    enableSnippets: true,
-                    showLineNumbers: true,
-                    tabSize: 2,
-                    useWorker: false, // Disable worker for better compatibility
-                  }}
-                  style={{
-                    backgroundColor: "#fafafa",
-                    borderRadius: "4px",
-                  }}
-                />
-              </Box>
-              {jsonError && (
-                <Typography variant="caption" color="error" sx={{ mt: 1 }}>
-                  {jsonError}
-                </Typography>
+                  <Box sx={{ mt: 1, textAlign: "center" }}>
+                    <Button
+                      size="small"
+                      onClick={() => setShowColorPicker(false)}
+                    >
+                      Close
+                    </Button>
+                  </Box>
+                </Box>
               )}
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ mt: 1 }}
-              >
-                JSON schema defining the attributes for this entity type. Edit
-                directly in the text editor above.
-              </Typography>
-            </FormControl>
+            </Box>
+          </Box>
 
-            {/* Audit Trail */}
-            <AuditTrail
-              updateDate={editingEntityType?.update_date}
-              updatedUserId={editingEntityType?.updated_user_id}
-            />
-
+          <FormControl fullWidth>
             <Box
               sx={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                mt: 2,
-                flexShrink: 0,
+                mb: 1,
               }}
             >
-              {/* Delete button - only show when editing */}
-              {editingEntityType && (
+              <FormLabel>Attributes Schema (JSON) *</FormLabel>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={formatJson}
+                disabled={mutation.isPending || isJsonAlreadyFormatted()}
+                sx={{ minWidth: "auto", px: 2 }}
+              >
+                Format JSON
+              </Button>
+            </Box>
+            <Box
+              sx={{
+                border: jsonError ? "2px solid #f44336" : "1px solid #ccc",
+                borderRadius: 1,
+                height: 300,
+                overflow: "auto",
+                backgroundColor: "#fafafa",
+              }}
+            >
+              <AceEditor
+                mode="json"
+                theme="github"
+                value={attributesSchema}
+                onChange={handleJsonChange}
+                name="json-schema-editor"
+                width="100%"
+                height="300px"
+                fontSize={14}
+                showPrintMargin={false}
+                showGutter={true}
+                highlightActiveLine={true}
+                setOptions={{
+                  enableBasicAutocompletion: true,
+                  enableLiveAutocompletion: true,
+                  enableSnippets: true,
+                  showLineNumbers: true,
+                  tabSize: 2,
+                  useWorker: false, // Disable worker for better compatibility
+                }}
+                style={{
+                  backgroundColor: "#fafafa",
+                  borderRadius: "4px",
+                }}
+              />
+            </Box>
+            {jsonError && (
+              <Typography variant="caption" color="error" sx={{ mt: 1 }}>
+                {jsonError}
+              </Typography>
+            )}
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+              JSON schema defining the attributes for this entity type. Edit
+              directly in the text editor above.
+            </Typography>
+          </FormControl>
+
+          {/* Audit Trail */}
+          <AuditTrail
+            updateDate={editingEntityType?.update_date}
+            updatedUserId={editingEntityType?.updated_user_id}
+          />
+
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mt: 2,
+              flexShrink: 0,
+            }}
+          >
+            {/* Delete button - only show when editing */}
+            {editingEntityType && (
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Are you sure you want to delete "${editingEntityType.name}"?\n\nThis action cannot be undone and may affect related entities.`
+                    )
+                  ) {
+                    deleteMutation.mutate();
+                  }
+                }}
+                disabled={mutation.isPending || deleteMutation.isPending}
+                sx={{ minWidth: "auto" }}
+              >
+                {deleteMutation.isPending ? (
+                  <>
+                    <CircularProgress size={16} sx={{ mr: 1 }} />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
+              </Button>
+            )}
+
+            {/* Action buttons */}
+            <Box sx={{ display: "flex", gap: 2 }}>
+              {editingEntityType && onClose && (
                 <Button
                   variant="outlined"
-                  color="error"
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        `Are you sure you want to delete "${editingEntityType.name}"?\n\nThis action cannot be undone and may affect related entities.`
-                      )
-                    ) {
-                      deleteMutation.mutate();
-                    }
-                  }}
+                  onClick={onClose}
                   disabled={mutation.isPending || deleteMutation.isPending}
-                  sx={{ minWidth: "auto" }}
                 >
-                  {deleteMutation.isPending ? (
-                    <>
-                      <CircularProgress size={16} sx={{ mr: 1 }} />
-                      Deleting...
-                    </>
-                  ) : (
-                    "Delete"
-                  )}
+                  Cancel
                 </Button>
               )}
-
-              {/* Action buttons */}
-              <Box sx={{ display: "flex", gap: 2 }}>
-                {editingEntityType && onClose && (
-                  <Button
-                    variant="outlined"
-                    onClick={onClose}
-                    disabled={mutation.isPending || deleteMutation.isPending}
-                  >
-                    Cancel
-                  </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={!canSubmit || deleteMutation.isPending}
+              >
+                {mutation.isPending ? (
+                  <>
+                    <CircularProgress size={20} sx={{ mr: 1 }} />
+                    {editingEntityType ? "Updating..." : "Creating..."}
+                  </>
+                ) : editingEntityType?.entity_type_id ? (
+                  `Update ${editingEntityType.name}`
+                ) : (
+                  "Create Entity Type"
                 )}
-                <Button
-                  type="submit"
-                  variant="contained"
-                  disabled={!canSubmit || deleteMutation.isPending}
-                >
-                  {mutation.isPending ? (
-                    <>
-                      <CircularProgress size={20} sx={{ mr: 1 }} />
-                      {editingEntityType ? "Updating..." : "Creating..."}
-                    </>
-                  ) : editingEntityType?.entity_type_id ? (
-                    `Update ${editingEntityType.name}`
-                  ) : (
-                    "Create Entity Type"
-                  )}
-                </Button>
-              </Box>
+              </Button>
             </Box>
           </Box>
-        </form>
-      </Paper>
+        </Box>
+      </form>
 
       {/* Success notification */}
       <Snackbar
@@ -756,7 +750,7 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
             : "Entity type created successfully!"}
         </Alert>
       </Snackbar>
-    </Box>
+    </Paper>
   );
 };
 

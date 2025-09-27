@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -9,7 +9,7 @@ import {
   Tooltip,
   IconButton,
 } from "@mui/material";
-import { InfoOutlined } from "@mui/icons-material";
+import { InfoOutlined, ArrowBack } from "@mui/icons-material";
 import { DataGrid } from "@mui/x-data-grid";
 import type {
   GridColDef,
@@ -64,30 +64,12 @@ const UsersTable: React.FC = () => {
         requesting_user_id: currentUser!.user_id,
         client_group_id: currentUser!.primary_client_group_id,
       };
-      console.log("🔍 UsersTable - Querying users with params:", queryParams);
-      console.log("🔍 UsersTable - Current user data:", currentUser);
-
-      try {
-        const result = await apiService.queryUsers(queryParams);
-        console.log("🔍 UsersTable - API result:", result);
-        console.log("🔍 UsersTable - API result type:", typeof result);
-        console.log("🔍 UsersTable - API result length:", result?.length);
-        if (result && Array.isArray(result)) {
-          console.log("🔍 UsersTable - First user:", result[0]);
-          console.log(
-            "🔍 UsersTable - All user IDs:",
-            result.map((u) => u.user_id)
-          );
-        }
-        return result;
-      } catch (error) {
-        console.error("🔍 UsersTable - API error:", error);
-        throw error;
-      }
+      return await apiService.queryUsers(queryParams);
     },
     enabled: !!currentUser?.primary_client_group_id && !!currentUser?.user_id,
-    staleTime: 0, // Always refetch
-    refetchOnMount: true, // Always refetch on mount
+    staleTime: 30 * 1000, // 30 seconds
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   // Fetch client groups to map IDs to names
@@ -98,14 +80,16 @@ const UsersTable: React.FC = () => {
     enabled: !!currentUser?.user_id,
   });
 
+  // Create client groups map for O(1) lookups
+  const clientGroupsMap = useMemo(() => {
+    if (!clientGroupsData) return new Map();
+    return new Map(
+      clientGroupsData.map((group: any) => [group.client_group_id, group.name])
+    );
+  }, [clientGroupsData]);
+
   // Transform users data
   const usersData = useMemo(() => {
-    console.log(
-      "🔍 UsersTable - Raw users data received:",
-      rawUsersData,
-      "Length:",
-      rawUsersData?.length
-    );
     if (!rawUsersData) return [];
 
     // Check if data is already in object format
@@ -136,7 +120,6 @@ const UsersTable: React.FC = () => {
       });
     }
 
-    console.log("🔍 UsersTable - Final processed data:", rawUsersData);
     return rawUsersData;
   }, [rawUsersData]);
 
@@ -194,12 +177,8 @@ const UsersTable: React.FC = () => {
   const columns: GridColDef[] = useMemo(() => {
     // Helper function to get client group name by ID
     const getClientGroupName = (groupId: number | null) => {
-      if (!groupId || !clientGroupsData) return "None";
-
-      const group = clientGroupsData.find(
-        (g: any) => g.client_group_id === groupId
-      );
-      return group ? group.name : `Group ${groupId}`;
+      if (!groupId) return "None";
+      return clientGroupsMap.get(groupId) || `Group ${groupId}`;
     };
 
     return [
@@ -265,17 +244,17 @@ const UsersTable: React.FC = () => {
         ),
       },
     ];
-  }, [currentUser, clientGroupsData]);
+  }, [currentUser, clientGroupsMap]);
 
-  const handleRowClick = (params: GridRowParams) => {
+  const handleRowClick = useCallback((params: GridRowParams) => {
     setEditingUser(params.row);
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleCloseModal = () => {
+  const handleCloseModal = useCallback(() => {
     setIsModalOpen(false);
     setEditingUser(null);
-  };
+  }, []);
 
   if (isLoading) {
     return (
@@ -446,7 +425,12 @@ const UsersTable: React.FC = () => {
       {/* Edit Modal */}
       <Modal
         open={isModalOpen}
-        onClose={handleCloseModal}
+        onClose={() => {}} // Disable backdrop clicks
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            handleCloseModal();
+          }
+        }}
         aria-labelledby="edit-user-modal"
         aria-describedby="edit-user-form"
       >
@@ -470,61 +454,65 @@ const UsersTable: React.FC = () => {
         </Box>
       </Modal>
 
-      {/* Client Groups Modal */}
-      <Modal
-        open={isClientGroupsModalOpen}
-        onClose={() => setIsClientGroupsModalOpen(false)}
-        aria-labelledby="client-groups-modal"
-        aria-describedby="client-groups-table"
-      >
+      {/* Client Groups Full Screen View */}
+      {isClientGroupsModalOpen && (
         <Box
           sx={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: "95%",
-            maxWidth: 1200,
-            height: "90vh",
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
             bgcolor: "background.paper",
-            borderRadius: 2,
-            boxShadow: 24,
-            p: 0,
-            overflow: "hidden",
+            zIndex: 1300,
+            overflow: "auto",
+            p: 2,
           }}
         >
+          <Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 2 }}>
+            <Button
+              variant="outlined"
+              onClick={() => setIsClientGroupsModalOpen(false)}
+              startIcon={<ArrowBack />}
+            >
+              Back to Users
+            </Button>
+            <Typography variant="h5">Client Groups</Typography>
+          </Box>
           <ClientGroupsTable />
         </Box>
-      </Modal>
+      )}
 
-      {/* Invitations Modal */}
-      <Modal
-        open={isInvitationsModalOpen}
-        onClose={() => setIsInvitationsModalOpen(false)}
-        aria-labelledby="invitations-modal"
-        aria-describedby="invitations-table"
-      >
+      {/* Invitations Full Screen View */}
+      {isInvitationsModalOpen && (
         <Box
           sx={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: "95%",
-            maxWidth: 1200,
-            height: "90vh",
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
             bgcolor: "background.paper",
-            borderRadius: 2,
-            boxShadow: 24,
-            p: 0,
-            overflow: "hidden",
+            zIndex: 1300,
+            overflow: "auto",
+            p: 2,
           }}
         >
+          <Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 2 }}>
+            <Button
+              variant="outlined"
+              onClick={() => setIsInvitationsModalOpen(false)}
+              startIcon={<ArrowBack />}
+            >
+              Back to Users
+            </Button>
+            <Typography variant="h5">Invitations</Typography>
+          </Box>
           <InvitationsTable />
         </Box>
-      </Modal>
+      )}
     </Box>
   );
 };
 
-export default UsersTable;
+export default React.memo(UsersTable);

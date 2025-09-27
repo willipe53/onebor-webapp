@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -41,7 +41,6 @@ const TransactionTypesTable: React.FC = () => {
         const result = await apiService.queryTransactionTypes({});
         return result;
       } catch (err) {
-        console.error("❌ TransactionTypesTable - API call failed:", err);
         throw err;
       }
     },
@@ -314,7 +313,12 @@ const TransactionTypesTable: React.FC = () => {
       {/* Edit Modal */}
       <Modal
         open={isModalOpen}
-        onClose={handleCloseModal}
+        onClose={() => {}} // Disable backdrop clicks
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            handleCloseModal();
+          }
+        }}
         aria-labelledby="edit-transaction-type-modal"
         aria-describedby="edit-transaction-type-form"
       >
@@ -345,4 +349,4 @@ const TransactionTypesTable: React.FC = () => {
   );
 };
 
-export default TransactionTypesTable;
+export default React.memo(TransactionTypesTable);

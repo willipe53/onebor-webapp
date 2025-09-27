@@ -127,7 +127,7 @@ CREATE TABLE `entities` (
   PRIMARY KEY (`entity_id`),
   KEY `fk_entities_entity_type` (`entity_type_id`),
   CONSTRAINT `fk_entities_entity_type` FOREIGN KEY (`entity_type_id`) REFERENCES `entity_types` (`entity_type_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=635 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=639 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -230,7 +230,7 @@ DROP TABLE IF EXISTS `transactions`;
 CREATE TABLE `transactions` (
   `transaction_id` int NOT NULL AUTO_INCREMENT,
   `portfolio_entity_id` int NOT NULL,
-  `counterparty_entity_id` int DEFAULT NULL,
+  `contra_entity_id` int DEFAULT NULL,
   `instrument_entity_id` int NOT NULL,
   `properties` json DEFAULT NULL,
   `transaction_status_id` int NOT NULL,
@@ -241,14 +241,14 @@ CREATE TABLE `transactions` (
   KEY `fk_trans_trans_type` (`transaction_type_id`),
   KEY `fk_trans_trans_status` (`transaction_status_id`),
   KEY `fk_party_entity` (`portfolio_entity_id`),
-  KEY `fk_counterparty_entity` (`counterparty_entity_id`),
+  KEY `fk_contra_entity` (`contra_entity_id`),
   KEY `fk_instrument_entity` (`instrument_entity_id`),
-  CONSTRAINT `fk_counterparty_entity` FOREIGN KEY (`counterparty_entity_id`) REFERENCES `entities` (`entity_id`),
+  CONSTRAINT `fk_contra_entity` FOREIGN KEY (`contra_entity_id`) REFERENCES `entities` (`entity_id`),
   CONSTRAINT `fk_instrument_entity` FOREIGN KEY (`instrument_entity_id`) REFERENCES `entities` (`entity_id`),
   CONSTRAINT `fk_party_entity` FOREIGN KEY (`portfolio_entity_id`) REFERENCES `entities` (`entity_id`),
   CONSTRAINT `fk_trans_trans_status` FOREIGN KEY (`transaction_status_id`) REFERENCES `transaction_statuses` (`transaction_status_id`),
   CONSTRAINT `fk_trans_trans_type` FOREIGN KEY (`transaction_type_id`) REFERENCES `transaction_types` (`transaction_type_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -345,10 +345,10 @@ SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-09-25 15:56:44
+-- Dump completed on 2025-09-27  9:57:18
 -- =============================================================================
 -- OneBor Database Schema Export
--- Generated on: 2025-09-25 15:56:36
+-- Generated on: 2025-09-27 09:57:10
 -- Database: onebor
 -- Host: panda-db.cnqay066ma0a.us-east-2.rds.amazonaws.com:3306
 -- 

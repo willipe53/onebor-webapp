@@ -49,7 +49,7 @@ def lambda_handler(event, context):
         client_group_id = body.get("client_group_id")
         transaction_id = body.get("transaction_id")
         portfolio_entity_id = body.get("portfolio_entity_id")
-        counterparty_entity_id = body.get("counterparty_entity_id")
+        contra_entity_id = body.get("contra_entity_id")
         instrument_entity_id = body.get("instrument_entity_id")
         transaction_type_id = body.get("transaction_type_id")
         transaction_status_id = body.get("transaction_status_id")
@@ -97,9 +97,9 @@ def lambda_handler(event, context):
                 if portfolio_entity_id:
                     query += " AND t.portfolio_entity_id = %s"
                     params.append(portfolio_entity_id)
-                if counterparty_entity_id:
-                    query += " AND t.counterparty_entity_id = %s"
-                    params.append(counterparty_entity_id)
+                if contra_entity_id:
+                    query += " AND t.contra_entity_id = %s"
+                    params.append(contra_entity_id)
                 if instrument_entity_id:
                     query += " AND t.instrument_entity_id = %s"
                     params.append(instrument_entity_id)

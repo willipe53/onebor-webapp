@@ -24,6 +24,22 @@ def get_connection(secrets):
 
 
 def lambda_handler(event, context):
+    """
+    Get entities with optional filtering by entity category.
+
+    Parameters:
+    - user_id (required): User ID for data protection
+    - entity_id (optional): Return specific entity by ID
+    - name (optional): Filter by entity name (exact match or partial if ends with %)
+    - entity_type_id (optional): Filter by specific entity type
+    - entity_category (optional): Filter by entity category (e.g., "Instrument", "Portfolio")
+    - client_group_id (optional): Filter by client group
+    - count_only (optional): Return only count instead of full records
+
+    Example usage:
+    - Get all instruments: {"user_id": 1, "entity_category": "Instrument"}
+    - Get all portfolios: {"user_id": 1, "entity_category": "Portfolio"}
+    """
     # CORS headers for all responses
     cors_headers = {
         "Content-Type": "application/json",
@@ -64,8 +80,11 @@ def lambda_handler(event, context):
         entity_id = body.get("entity_id")
         name = body.get("name")
         entity_type_id = body.get("entity_type_id")
+        entity_category = body.get("entity_category")
         client_group_id = body.get("client_group_id")
         count_only = body.get("count_only", False)  # Default to False
+
+        print(f"DEBUG: entity_category filter: {entity_category}")
 
         secrets = get_db_secret()
         conn = get_connection(secrets)
@@ -76,6 +95,7 @@ def lambda_handler(event, context):
                 SELECT COUNT(DISTINCT e.entity_id) as entity_count FROM entities e
                 JOIN client_group_entities cge ON e.entity_id = cge.entity_id
                 JOIN client_group_users cgu ON cge.client_group_id = cgu.client_group_id
+                LEFT JOIN entity_types et ON e.entity_type_id = et.entity_type_id
                 WHERE cgu.user_id = %s
             """
         else:
@@ -83,6 +103,7 @@ def lambda_handler(event, context):
                 SELECT DISTINCT e.* FROM entities e
                 JOIN client_group_entities cge ON e.entity_id = cge.entity_id
                 JOIN client_group_users cgu ON cge.client_group_id = cgu.client_group_id
+                LEFT JOIN entity_types et ON e.entity_type_id = et.entity_type_id
                 WHERE cgu.user_id = %s
             """
         params = [user_id]
@@ -112,6 +133,11 @@ def lambda_handler(event, context):
             if entity_type_id:
                 query += " AND e.entity_type_id = %s"
                 params.append(entity_type_id)
+
+        # Add entity_category filter if provided
+        if entity_category:
+            query += " AND et.entity_category = %s"
+            params.append(entity_category)
 
         with conn.cursor() as cursor:
             try:
