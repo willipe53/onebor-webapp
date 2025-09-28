@@ -63,7 +63,7 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
   editingEntityType,
   onClose,
 }) => {
-  const { dbUserId } = useAuth();
+  const { userId: _userId } = useAuth();
   const [name, setName] = useState("");
   const [shortLabel, setShortLabel] = useState("");
   const [labelColor, setLabelColor] = useState("#4caf50"); // Default green
@@ -140,13 +140,23 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
       }
       setLabelColor(color);
 
-      // Set schema string
+      // Set schema string - always format when editing
       if (editingEntityType.attributes_schema) {
         try {
-          const schema =
-            typeof editingEntityType.attributes_schema === "string"
-              ? editingEntityType.attributes_schema
-              : JSON.stringify(editingEntityType.attributes_schema, null, 2);
+          let schema;
+
+          if (typeof editingEntityType.attributes_schema === "string") {
+            // If it's already a string, parse it first then format it
+            const parsed = JSON.parse(editingEntityType.attributes_schema);
+            schema = JSON.stringify(parsed, null, 2);
+          } else {
+            // If it's an object, format it directly
+            schema = JSON.stringify(
+              editingEntityType.attributes_schema,
+              null,
+              2
+            );
+          }
 
           // Validate JSON
           JSON.parse(schema);
@@ -178,10 +188,18 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
         let schema;
         if (editingEntityType.attributes_schema) {
           try {
-            schema =
-              typeof editingEntityType.attributes_schema === "string"
-                ? editingEntityType.attributes_schema
-                : JSON.stringify(editingEntityType.attributes_schema, null, 2);
+            if (typeof editingEntityType.attributes_schema === "string") {
+              // If it's already a string, parse it first then format it
+              const parsed = JSON.parse(editingEntityType.attributes_schema);
+              schema = JSON.stringify(parsed, null, 2);
+            } else {
+              // If it's an object, format it directly
+              schema = JSON.stringify(
+                editingEntityType.attributes_schema,
+                null,
+                2
+              );
+            }
           } catch {
             schema = JSON.stringify(
               { type: "object", properties: {} },
@@ -252,8 +270,8 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
       queryClient.invalidateQueries({ queryKey: ["entities"] });
       queryClient.refetchQueries({ queryKey: ["entities"] });
 
-      // Close modal if in edit mode (with a small delay to show the success message)
-      if (editingEntityType && onClose) {
+      // Close modal after successful operation (with a small delay to show the success message)
+      if (onClose) {
         setTimeout(() => {
           onClose();
         }, 1000); // 1 second delay to show success message
@@ -307,7 +325,7 @@ const EntityTypeForm: React.FC<EntityTypeFormProps> = ({
       } = {
         name,
         attributes_schema: schemaObject,
-        user_id: dbUserId!,
+        user_id: 1, // TODO: Get from context when available
         ...(shortLabel.trim() && { short_label: shortLabel.trim() }),
         ...(colorForDb.trim() && { label_color: colorForDb.trim() }),
         ...(entityCategory.trim() && {

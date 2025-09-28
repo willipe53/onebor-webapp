@@ -74,6 +74,36 @@ def send_to_sqs(transaction_data: Dict[str, Any], operation: str) -> bool:
         return False
 
 
+def trigger_position_keeper_via_eventbridge() -> bool:
+    """Trigger the position keeper via EventBridge instead of direct Lambda invocation."""
+    try:
+        eventbridge_client = boto3.client('events', region_name='us-east-2')
+
+        print("DEBUG: Triggering position keeper via EventBridge...")
+
+        response = eventbridge_client.put_events(
+            Entries=[
+                {
+                    'Source': 'onebor.transaction',
+                    'DetailType': 'Transaction Queued',
+                    'Detail': json.dumps({
+                        "source": "updatePandaTransaction",
+                        "trigger": "transaction_queued"
+                    })
+                }
+            ]
+        )
+
+        print(
+            f"DEBUG: EventBridge event sent successfully: {response['Entries'][0]['EventId']}")
+        return True
+
+    except Exception as e:
+        print(
+            f"ERROR: Failed to trigger position keeper via EventBridge: {str(e)}")
+        return False
+
+
 def lambda_handler(event, context):
     """Lambda handler for creating/updating transactions."""
     print(f"DEBUG: Event: {event}")
@@ -108,11 +138,12 @@ def lambda_handler(event, context):
                 "body": json.dumps({"error": "user_id is required"})
             }
 
-        if not transaction_id and not all([portfolio_entity_id, instrument_entity_id, transaction_type_id]):
+        # For new transactions, instrument_entity_id can be 0 (NULL) for investor transactions
+        if not transaction_id and not all([portfolio_entity_id, transaction_type_id]):
             return {
                 "statusCode": 400,
                 "headers": cors_headers,
-                "body": json.dumps({"error": "portfolio_entity_id, instrument_entity_id, and transaction_type_id are required for new transactions"})
+                "body": json.dumps({"error": "portfolio_entity_id and transaction_type_id are required for new transactions"})
             }
 
         # Get database connection
@@ -130,10 +161,14 @@ def lambda_handler(event, context):
                         params.append(portfolio_entity_id)
                     if contra_entity_id is not None:
                         updates.append("contra_entity_id = %s")
-                        params.append(contra_entity_id)
+                        # Convert 0 to None (NULL) when no contra entity is selected
+                        params.append(
+                            contra_entity_id if contra_entity_id != 0 else None)
                     if instrument_entity_id is not None:
                         updates.append("instrument_entity_id = %s")
-                        params.append(instrument_entity_id)
+                        # Convert 0 to None (NULL) for investor transactions
+                        params.append(
+                            instrument_entity_id if instrument_entity_id != 0 else None)
                     if transaction_type_id is not None:
                         updates.append("transaction_type_id = %s")
                         params.append(transaction_type_id)
@@ -174,14 +209,32 @@ def lambda_handler(event, context):
                         print(
                             f"DEBUG: transaction_status_id value in params: {params[params.index(transaction_status_id)]}")
 
-                    cursor.execute(sql, params)
+                    try:
+                        cursor.execute(sql, params)
+                    except Exception as e:
+                        print(f"DEBUG: SQL execution error: {e}")
+                        return {
+                            "statusCode": 400,
+                            "headers": cors_headers,
+                            "body": json.dumps({"error": f"Database error: {str(e)}"})
+                        }
 
                     if cursor.rowcount == 0:
-                        return {
-                            "statusCode": 404,
-                            "headers": cors_headers,
-                            "body": json.dumps({"error": f"Transaction with ID {transaction_id} not found"})
-                        }
+                        # Check if transaction exists at all
+                        cursor.execute("SELECT transaction_id FROM transactions WHERE transaction_id = %s", [
+                                       transaction_id])
+                        if cursor.fetchone():
+                            return {
+                                "statusCode": 403,
+                                "headers": cors_headers,
+                                "body": json.dumps({"error": f"Transaction with ID {transaction_id} exists but cannot be updated (permission denied or constraint violation)"})
+                            }
+                        else:
+                            return {
+                                "statusCode": 404,
+                                "headers": cors_headers,
+                                "body": json.dumps({"error": f"Transaction with ID {transaction_id} not found"})
+                            }
 
                     conn.commit()
 
@@ -200,7 +253,11 @@ def lambda_handler(event, context):
                         }
 
                         sqs_success = send_to_sqs(transaction_data, "update")
-                        if not sqs_success:
+                        if sqs_success:
+                            print(f"DEBUG: SQS message sent successfully")
+                            print(
+                                f"DEBUG: Position keeper can be run manually from the UI")
+                        else:
                             print(
                                 "WARNING: Failed to send update message to SQS, but transaction was updated successfully")
                     else:
@@ -253,8 +310,10 @@ def lambda_handler(event, context):
 
                     params = [
                         portfolio_entity_id,
-                        contra_entity_id,
-                        instrument_entity_id,
+                        # Convert 0 to NULL when no contra entity is selected
+                        contra_entity_id if contra_entity_id != 0 else None,
+                        # Convert 0 to NULL for investor transactions
+                        instrument_entity_id if instrument_entity_id != 0 else None,
                         transaction_type_id,
                         transaction_status_id,
                         properties_value,
@@ -284,7 +343,11 @@ def lambda_handler(event, context):
                         }
 
                         sqs_success = send_to_sqs(transaction_data, "create")
-                        if not sqs_success:
+                        if sqs_success:
+                            print(f"DEBUG: SQS message sent successfully")
+                            print(
+                                f"DEBUG: Position keeper can be run manually from the UI")
+                        else:
                             print(
                                 "WARNING: Failed to send create message to SQS, but transaction was created successfully")
                     else:

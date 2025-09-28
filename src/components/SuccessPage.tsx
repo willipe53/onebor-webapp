@@ -81,7 +81,7 @@ const SuccessPage: React.FC = () => {
         user_id: currentUser!.user_id,
         client_group_id: currentUser!.primary_client_group_id,
         count_only: true,
-      }),
+      } as any),
     enabled: !!currentUser?.user_id && !!currentUser?.primary_client_group_id,
     select: (data) => (typeof data === "number" ? data : data?.length || 0),
   });

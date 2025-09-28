@@ -10,18 +10,20 @@ import {
   Autocomplete,
   Tooltip,
   IconButton,
+  Alert,
+  Snackbar,
 } from "@mui/material";
-import { Add, InfoOutlined, ArrowBack } from "@mui/icons-material";
+import { Add, InfoOutlined, ArrowBack, PlayArrow } from "@mui/icons-material";
 import { DataGrid } from "@mui/x-data-grid";
 import type {
   GridColDef,
   GridRenderCellParams,
   GridRowParams,
 } from "@mui/x-data-grid";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import * as apiService from "../services/api";
-import DynamicTransactionForm from "./DynamicTransactionForm";
+import TransactionForm from "./TransactionForm";
 import TransactionTypesTable from "./TransactionTypesTable";
 
 // Helper function for formatting properties
@@ -95,6 +97,31 @@ const TransactionsTable: React.FC = () => {
   const [selectedTransactionStatus, setSelectedTransactionStatus] = useState<
     number | null
   >(null);
+  const [positionKeeperMessage, setPositionKeeperMessage] =
+    useState<string>("");
+  const [positionKeeperSeverity, setPositionKeeperSeverity] = useState<
+    "success" | "error"
+  >("success");
+
+  // Position keeper mutation
+  const queryClient = useQueryClient();
+  const runPositionKeeperMutation = useMutation({
+    mutationFn: apiService.runPositionKeeper,
+    onSuccess: (data) => {
+      setPositionKeeperMessage(
+        data.message || "Position keeper executed successfully"
+      );
+      setPositionKeeperSeverity("success");
+      // Refresh transactions to see any status changes
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    },
+    onError: (error: any) => {
+      setPositionKeeperMessage(
+        error.message || "Failed to run position keeper"
+      );
+      setPositionKeeperSeverity("error");
+    },
+  });
 
   // Memoize status options to prevent recreation on every render
   const statusOptions = useMemo(
@@ -430,6 +457,35 @@ const TransactionsTable: React.FC = () => {
         >
           <Button
             variant="contained"
+            color="secondary"
+            size="small"
+            onClick={() => runPositionKeeperMutation.mutate()}
+            disabled={runPositionKeeperMutation.isPending}
+            startIcon={
+              runPositionKeeperMutation.isPending ? (
+                <CircularProgress size={16} />
+              ) : (
+                <PlayArrow />
+              )
+            }
+            sx={{
+              borderRadius: "20px",
+              textTransform: "none",
+              fontWeight: 600,
+            }}
+          >
+            Run Position Keeper
+          </Button>
+          <Tooltip
+            title="Manually process queued transactions and generate positions."
+            placement="top"
+          >
+            <IconButton size="small" sx={{ color: "text.secondary", ml: -1 }}>
+              <InfoOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Button
+            variant="contained"
             color="primary"
             size="small"
             onClick={() => setIsTransactionTypesModalOpen(true)}
@@ -439,7 +495,7 @@ const TransactionsTable: React.FC = () => {
               fontWeight: 600,
             }}
           >
-            Trans Types
+            Edit Transaction Types
           </Button>
           <Tooltip
             title="Manage transaction types and their properties. Transaction types define categories for organizing your transactions (e.g., Buy, Sell, Transfer)."
@@ -606,7 +662,7 @@ const TransactionsTable: React.FC = () => {
             p: 0,
           }}
         >
-          <DynamicTransactionForm
+          <TransactionForm
             ref={formRef}
             editingTransaction={editingTransaction}
             onClose={handleCloseForm}
@@ -642,6 +698,22 @@ const TransactionsTable: React.FC = () => {
           <TransactionTypesTable />
         </Box>
       )}
+
+      {/* Position Keeper Result Snackbar */}
+      <Snackbar
+        open={!!positionKeeperMessage}
+        autoHideDuration={6000}
+        onClose={() => setPositionKeeperMessage("")}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setPositionKeeperMessage("")}
+          severity={positionKeeperSeverity}
+          sx={{ width: "100%" }}
+        >
+          {positionKeeperMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

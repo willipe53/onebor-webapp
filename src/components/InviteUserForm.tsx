@@ -241,7 +241,7 @@ export const InviteUserForm: React.FC<InviteUserFormProps> = ({
       action: "create",
       expires_at: formData.expiresAt!.toISOString(),
       client_group_id: formData.clientGroupId as number,
-      email_sent_to: formData.email,
+      email: formData.email,
     });
   };
 

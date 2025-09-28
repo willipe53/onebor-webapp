@@ -29,6 +29,8 @@ import {
   prepareJsonForForm,
   formatNumberForDisplay,
   parseFormattedNumber,
+  formatPriceForDisplay,
+  parseNumericShortcut,
 } from "../utils";
 import AceEditor from "react-ace";
 import "ace-builds/src-noconflict/mode-json";
@@ -693,9 +695,19 @@ const EntityForm: React.FC<EntityFormProps> = ({
       );
     }
 
-    // Number field with comma formatting
+    // Number field with comma formatting and numeric shortcuts
     if (field.type === "number" || field.type === "integer") {
-      const displayValue = formatNumberForDisplay(value);
+      // For display, use the raw string value if not formatted, otherwise format it
+      let displayValue = "";
+      const isPriceField = field.key.toLowerCase().includes("price");
+
+      if (typeof value === "number") {
+        displayValue = isPriceField
+          ? formatPriceForDisplay(value)
+          : formatNumberForDisplay(value);
+      } else if (typeof value === "string" && value) {
+        displayValue = value;
+      }
 
       return (
         <Grid key={field.key}>
@@ -705,22 +717,24 @@ const EntityForm: React.FC<EntityFormProps> = ({
             type="text" // Use text type to allow commas
             value={displayValue}
             onChange={(e) => {
-              const numericValue = parseFormattedNumber(e.target.value);
-              handleDynamicFieldChange(field.key, numericValue);
+              // Store the raw string value during typing to preserve decimals and shortcuts
+              handleDynamicFieldChange(field.key, e.target.value);
             }}
             onBlur={(e) => {
-              // Format the field with commas when user tabs out
-              const numericValue = parseFormattedNumber(e.target.value);
-              const formattedValue = formatNumberForDisplay(numericValue);
+              // Parse numeric shortcuts (k, m, b) and convert to number
+              const numericValue = parseNumericShortcut(e.target.value);
               handleDynamicFieldChange(field.key, numericValue);
-              // Update the display value to show formatting
-              e.target.value = formattedValue;
             }}
             error={!!error}
-            helperText={error}
+            helperText={
+              error ||
+              (isPriceField
+                ? "Enter exact price (e.g., 123.456) or use shortcuts (1k, 78m, 6.67b)"
+                : "Use shortcuts: 1k=1000, 78m=78M, 6.67b=6.67B")
+            }
             inputProps={{
-              inputMode: "numeric",
-              pattern: "[0-9,]*\\.?[0-9]*", // Allow numbers, commas, and decimal points
+              inputMode: "decimal", // Use decimal instead of numeric to allow decimal points
+              pattern: "[0-9,]*\\.?[0-9]*[kmb]?", // Allow numbers, commas, decimal points, and k/m/b
             }}
           />
         </Grid>

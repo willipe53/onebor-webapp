@@ -305,6 +305,7 @@ export interface CreateInvitationRequest {
   action: "create";
   expires_at: string;
   client_group_id: number;
+  email?: string;
 }
 
 export interface GetInvitationRequest {
@@ -712,6 +713,11 @@ export const deleteTransaction = async (
   });
 };
 
+// Position Keeper API Functions
+export const runPositionKeeper = async (): Promise<{ message: string }> => {
+  return apiCall<{ message: string }>("/update_positions", {});
+};
+
 // API Service
 export const apiService = {
   // Client Groups
@@ -751,4 +757,7 @@ export const apiService = {
   queryTransactions,
   updateTransaction,
   deleteTransaction,
+
+  // Position Keeper
+  runPositionKeeper,
 };

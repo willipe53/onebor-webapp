@@ -76,13 +76,23 @@ const TransactionTypeForm: React.FC<TransactionTypeFormProps> = ({
     if (editingTransactionType) {
       setName(editingTransactionType.name || "");
 
-      // Set properties string
+      // Set properties string - always format when editing
       if (editingTransactionType.properties) {
         try {
-          const propertiesStr =
-            typeof editingTransactionType.properties === "string"
-              ? editingTransactionType.properties
-              : JSON.stringify(editingTransactionType.properties, null, 2);
+          let propertiesStr;
+
+          if (typeof editingTransactionType.properties === "string") {
+            // If it's already a string, parse it first then format it
+            const parsed = JSON.parse(editingTransactionType.properties);
+            propertiesStr = JSON.stringify(parsed, null, 2);
+          } else {
+            // If it's an object, format it directly
+            propertiesStr = JSON.stringify(
+              editingTransactionType.properties,
+              null,
+              2
+            );
+          }
 
           // Validate JSON
           JSON.parse(propertiesStr);
@@ -101,10 +111,18 @@ const TransactionTypeForm: React.FC<TransactionTypeFormProps> = ({
         let propertiesStr;
         if (editingTransactionType.properties) {
           try {
-            propertiesStr =
-              typeof editingTransactionType.properties === "string"
-                ? editingTransactionType.properties
-                : JSON.stringify(editingTransactionType.properties, null, 2);
+            if (typeof editingTransactionType.properties === "string") {
+              // If it's already a string, parse it first then format it
+              const parsed = JSON.parse(editingTransactionType.properties);
+              propertiesStr = JSON.stringify(parsed, null, 2);
+            } else {
+              // If it's an object, format it directly
+              propertiesStr = JSON.stringify(
+                editingTransactionType.properties,
+                null,
+                2
+              );
+            }
           } catch {
             propertiesStr = "{}";
           }

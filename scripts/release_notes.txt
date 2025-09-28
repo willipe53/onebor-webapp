@@ -1,0 +1,6 @@
+- database/updatePandaPositions.py - Basic position keeper implementation
+- Manual Trigger: Added "Run Position Keeper" button in TransactionsTable UI
+- Default Values: Auto-populate form fields with schema-defined defaults
+- Help Text: Display field descriptions from schema as helper text
+- Price Field Precision: Prevent rounding in price fields (preserve exact decimals like 123.456)
+- Numeric Shortcuts: Support k/m/b suffixes (1k=1000, 78m=78M, 6.67b=6.67B)

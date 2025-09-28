@@ -218,6 +218,35 @@ export const parseFormattedNumber = (value: string): number => {
 };
 
 /**
+ * Parse numeric shortcuts (k, m, b) to actual numbers
+ * Examples: "1k" -> 1000, "78m" -> 78000000, "6.67b" -> 6670000000
+ */
+export const parseNumericShortcut = (value: string): number => {
+  if (!value) return 0;
+
+  const trimmed = value.trim().toLowerCase();
+  const match = trimmed.match(/^([\d,]+\.?\d*)\s*([kmb])?$/);
+
+  if (!match) return 0;
+
+  const [, numberPart, suffix] = match;
+  const baseNumber = parseFormattedNumber(numberPart);
+
+  if (isNaN(baseNumber)) return 0;
+
+  switch (suffix) {
+    case "k":
+      return baseNumber * 1000;
+    case "m":
+      return baseNumber * 1000000;
+    case "b":
+      return baseNumber * 1000000000;
+    default:
+      return baseNumber;
+  }
+};
+
+/**
  * Format a number for display in forms (with commas)
  * Handles both string and number inputs
  */
@@ -230,4 +259,26 @@ export const formatNumberForDisplay = (value: number | string): string => {
   }
 
   return formatNumberWithCommas(value);
+};
+
+/**
+ * Format a number for display in price fields (preserves exact decimal precision)
+ * Unlike formatNumberForDisplay, this doesn't round to 2 decimal places
+ */
+export const formatPriceForDisplay = (value: number | string): string => {
+  if (value === null || value === undefined || value === "") return "";
+
+  // If it's already a formatted string with commas, return as-is
+  if (typeof value === "string" && value.includes(",")) {
+    return value;
+  }
+
+  const numValue = typeof value === "string" ? parseFloat(value) : value;
+  if (isNaN(numValue)) return "";
+
+  // Use toLocaleString but with more decimal places to preserve precision
+  return numValue.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 10, // Allow up to 10 decimal places for prices
+  });
 };
