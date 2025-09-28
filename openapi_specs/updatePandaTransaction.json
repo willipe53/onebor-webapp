@@ -1,0 +1,150 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "onebor Updatetransaction API",
+    "description": "Lambda handler for creating/updating transactions.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "onebor API Support",
+      "email": "support@onebor.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.onebor.com/panda",
+      "description": "Production server"
+    },
+    {
+      "url": "https://zwkvk3lyl3.execute-api.us-east-2.amazonaws.com/dev",
+      "description": "Development server"
+    }
+  ],
+  "paths": {
+    "/update_transaction": {
+      "post": {
+        "summary": "Updatetransaction",
+        "description": "Lambda handler for creating/updating transactions.",
+        "operationId": "updatePandaTransaction",
+        "tags": [
+          "Updatetransaction"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "user_id": {
+                    "type": "integer"
+                  },
+                  "transaction_id": {
+                    "type": "integer"
+                  },
+                  "portfolio_entity_id": {
+                    "type": "integer"
+                  },
+                  "contra_entity_id": {
+                    "type": "integer"
+                  },
+                  "instrument_entity_id": {
+                    "type": "integer"
+                  },
+                  "transaction_type_id": {
+                    "type": "integer"
+                  },
+                  "transaction_status_id": {
+                    "type": "integer"
+                  },
+                  "properties": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "user_id",
+                  "transaction_id",
+                  "portfolio_entity_id",
+                  "contra_entity_id",
+                  "instrument_entity_id",
+                  "transaction_type_id",
+                  "transaction_status_id",
+                  "properties"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "options": {
+        "summary": "CORS preflight",
+        "description": "Handle CORS preflight requests",
+        "responses": {
+          "200": {
+            "description": "CORS preflight successful"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

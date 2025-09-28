@@ -734,7 +734,6 @@ const EntityForm: React.FC<EntityFormProps> = ({
             }
             inputProps={{
               inputMode: "decimal", // Use decimal instead of numeric to allow decimal points
-              pattern: "[0-9,]*\\.?[0-9]*[kmb]?", // Allow numbers, commas, decimal points, and k/m/b
             }}
           />
         </Grid>

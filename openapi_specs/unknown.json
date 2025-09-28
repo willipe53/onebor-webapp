@@ -1,0 +1,121 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "onebor Create Transaction Status API",
+    "description": "API endpoint for Create Transaction Status",
+    "version": "1.0.0",
+    "contact": {
+      "name": "onebor API Support",
+      "email": "support@onebor.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.onebor.com/panda",
+      "description": "Production server"
+    },
+    {
+      "url": "https://zwkvk3lyl3.execute-api.us-east-2.amazonaws.com/dev",
+      "description": "Development server"
+    }
+  ],
+  "paths": {
+    "/create_transaction_status": {
+      "post": {
+        "summary": "Create Transaction Status",
+        "description": "API endpoint for Create Transaction Status",
+        "operationId": "unknown",
+        "tags": [
+          "Create Transaction Status"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "count_only": {
+                    "type": "boolean"
+                  },
+                  "limit": {
+                    "type": "number"
+                  },
+                  "offset": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "options": {
+        "summary": "CORS preflight",
+        "description": "Handle CORS preflight requests",
+        "responses": {
+          "200": {
+            "description": "CORS preflight successful"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

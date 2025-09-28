@@ -1,0 +1,134 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "onebor Updateclientgroup API",
+    "description": "Lambda function updatePandaClientGroup",
+    "version": "1.0.0",
+    "contact": {
+      "name": "onebor API Support",
+      "email": "support@onebor.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.onebor.com/panda",
+      "description": "Production server"
+    },
+    {
+      "url": "https://zwkvk3lyl3.execute-api.us-east-2.amazonaws.com/dev",
+      "description": "Development server"
+    }
+  ],
+  "paths": {
+    "/update_client_group": {
+      "post": {
+        "summary": "Updateclientgroup",
+        "description": "Lambda function updatePandaClientGroup",
+        "operationId": "updatePandaClientGroup",
+        "tags": [
+          "Updateclientgroup"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "client_group_id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "integer"
+                  },
+                  "preferences": {
+                    "type": "integer"
+                  },
+                  "user_id": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "client_group_id",
+                  "name",
+                  "preferences",
+                  "user_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "options": {
+        "summary": "CORS preflight",
+        "description": "Handle CORS preflight requests",
+        "responses": {
+          "200": {
+            "description": "CORS preflight successful"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

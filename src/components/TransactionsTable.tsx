@@ -1,4 +1,10 @@
-import React, { useState, useMemo, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+  useEffect,
+} from "react";
 import {
   Box,
   Typography,
@@ -13,7 +19,13 @@ import {
   Alert,
   Snackbar,
 } from "@mui/material";
-import { Add, InfoOutlined, ArrowBack, PlayArrow } from "@mui/icons-material";
+import {
+  Add,
+  InfoOutlined,
+  ArrowBack,
+  PlayArrow,
+  Pause,
+} from "@mui/icons-material";
 import { DataGrid } from "@mui/x-data-grid";
 import type {
   GridColDef,
@@ -102,6 +114,7 @@ const TransactionsTable: React.FC = () => {
   const [positionKeeperSeverity, setPositionKeeperSeverity] = useState<
     "success" | "error"
   >("success");
+  const [isPollingActive, setIsPollingActive] = useState(false);
 
   // Position keeper mutation
   const queryClient = useQueryClient();
@@ -276,6 +289,40 @@ const TransactionsTable: React.FC = () => {
     entities,
   ]);
 
+  // Polling logic for QUEUED transactions
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    if (isPollingActive) {
+      // Check for QUEUED transactions every 10 seconds
+      intervalId = setInterval(() => {
+        if (transactionsData && transactionsData.length > 0) {
+          const queuedTransactions = transactionsData.filter(
+            (transaction) => transaction.transaction_status_id === 2 // QUEUED
+          );
+
+          if (queuedTransactions.length > 0) {
+            console.log(
+              `Found ${queuedTransactions.length} QUEUED transactions, triggering position keeper`
+            );
+            runPositionKeeperMutation.mutate();
+          }
+        }
+      }, 10000); // 10 seconds
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [isPollingActive, transactionsData, runPositionKeeperMutation]);
+
+  // Toggle polling function
+  const togglePolling = useCallback(() => {
+    setIsPollingActive((prev) => !prev);
+  }, []);
+
   const handleEdit = useCallback((transaction: apiService.Transaction) => {
     setEditingTransaction(transaction);
     setIsFormOpen(true);
@@ -429,7 +476,16 @@ const TransactionsTable: React.FC = () => {
           placement="right"
           arrow
         >
-          <IconButton size="small" sx={{ color: "text.secondary" }}>
+          <IconButton
+            size="small"
+            sx={{
+              color: "text.secondary",
+              p: 0.25,
+              "&:hover": {
+                backgroundColor: "rgba(0, 0, 0, 0.04)",
+              },
+            }}
+          >
             <InfoOutlined fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -457,13 +513,15 @@ const TransactionsTable: React.FC = () => {
         >
           <Button
             variant="contained"
-            color="secondary"
+            color={isPollingActive ? "error" : "primary"}
             size="small"
-            onClick={() => runPositionKeeperMutation.mutate()}
+            onClick={togglePolling}
             disabled={runPositionKeeperMutation.isPending}
             startIcon={
               runPositionKeeperMutation.isPending ? (
                 <CircularProgress size={16} />
+              ) : isPollingActive ? (
+                <Pause />
               ) : (
                 <PlayArrow />
               )
@@ -474,13 +532,26 @@ const TransactionsTable: React.FC = () => {
               fontWeight: 600,
             }}
           >
-            Run Position Keeper
+            {isPollingActive ? "Stop Position Keeper" : "Run Position Keeper"}
           </Button>
           <Tooltip
-            title="Manually process queued transactions and generate positions."
+            title={
+              isPollingActive
+                ? "Stop automatic processing of queued transactions"
+                : "Start automatic processing of queued transactions every 10 seconds"
+            }
             placement="top"
           >
-            <IconButton size="small" sx={{ color: "text.secondary", ml: -1 }}>
+            <IconButton
+              size="small"
+              sx={{
+                color: "text.secondary",
+                p: 0.25,
+                "&:hover": {
+                  backgroundColor: "rgba(0, 0, 0, 0.04)",
+                },
+              }}
+            >
               <InfoOutlined fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -504,10 +575,10 @@ const TransactionsTable: React.FC = () => {
             <IconButton
               size="small"
               sx={{
-                color: "primary.main",
+                color: "text.secondary",
                 p: 0.25,
                 "&:hover": {
-                  backgroundColor: "rgba(25, 118, 210, 0.1)",
+                  backgroundColor: "rgba(0, 0, 0, 0.04)",
                 },
               }}
             >

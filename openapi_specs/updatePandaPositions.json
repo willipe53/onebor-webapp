@@ -1,0 +1,149 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "onebor Updatepositions API",
+    "description": "Lambda handler for the position keeper.\n\n    This function handles manual triggers, scheduled invocations, and on-demand processing.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "onebor API Support",
+      "email": "support@onebor.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.onebor.com/panda",
+      "description": "Production server"
+    },
+    {
+      "url": "https://zwkvk3lyl3.execute-api.us-east-2.amazonaws.com/dev",
+      "description": "Development server"
+    }
+  ],
+  "paths": {
+    "/update_positions": {
+      "post": {
+        "summary": "Updatepositions",
+        "description": "Lambda handler for the position keeper.\n\n    This function handles manual triggers, scheduled invocations, and on-demand processing.",
+        "operationId": "updatePandaPositions",
+        "tags": [
+          "Updatepositions"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operation": {
+                    "type": "integer"
+                  },
+                  "transaction_id": {
+                    "type": "integer"
+                  },
+                  "transaction_type_id": {
+                    "type": "integer"
+                  },
+                  "portfolio_entity_id": {
+                    "type": "integer"
+                  },
+                  "contra_entity_id": {
+                    "type": "integer"
+                  },
+                  "instrument_entity_id": {
+                    "type": "integer"
+                  },
+                  "updated_user_id": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "operation",
+                  "transaction_id",
+                  "transaction_type_id",
+                  "portfolio_entity_id",
+                  "contra_entity_id",
+                  "instrument_entity_id",
+                  "updated_user_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "options": {
+        "summary": "CORS preflight",
+        "description": "Handle CORS preflight requests",
+        "responses": {
+          "200": {
+            "description": "CORS preflight successful"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

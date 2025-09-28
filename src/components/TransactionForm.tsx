@@ -122,8 +122,8 @@ const TransactionForm = forwardRef<TransactionFormRef, TransactionFormProps>(
           user_id: currentUser!.user_id,
         }),
       enabled: !!currentUser?.user_id,
-      staleTime: 30 * 1000, // 30 seconds
-      refetchOnMount: true,
+      staleTime: 60 * 1000, // 1 minute - entities don't change often
+      refetchOnMount: false, // Don't refetch if already cached
       refetchOnWindowFocus: false,
     });
 
@@ -133,7 +133,7 @@ const TransactionForm = forwardRef<TransactionFormRef, TransactionFormProps>(
       queryFn: () =>
         apiService.queryEntitiesByCategory(currentUser!.user_id, "Currency"),
       enabled: !!currentUser?.user_id,
-      staleTime: 30 * 1000, // 30 seconds
+      staleTime: 5 * 60 * 1000, // 5 minutes - currencies rarely change
       refetchOnMount: false,
       refetchOnWindowFocus: false,
     });
@@ -147,7 +147,7 @@ const TransactionForm = forwardRef<TransactionFormRef, TransactionFormProps>(
       queryFn: () =>
         apiService.queryEntitiesByCategory(currentUser!.user_id, "Portfolio"),
       enabled: !!currentUser?.user_id,
-      staleTime: 30 * 1000, // 30 seconds
+      staleTime: 5 * 60 * 1000, // 5 minutes - currencies rarely change
       refetchOnMount: false,
       refetchOnWindowFocus: false,
     });
@@ -160,7 +160,7 @@ const TransactionForm = forwardRef<TransactionFormRef, TransactionFormProps>(
       queryFn: () =>
         apiService.queryEntitiesByCategory(currentUser!.user_id, "Instrument"),
       enabled: !!currentUser?.user_id,
-      staleTime: 30 * 1000, // 30 seconds
+      staleTime: 5 * 60 * 1000, // 5 minutes - currencies rarely change
       refetchOnMount: false,
       refetchOnWindowFocus: false,
     });
@@ -178,6 +178,9 @@ const TransactionForm = forwardRef<TransactionFormRef, TransactionFormProps>(
     const { data: transactionTypes } = useQuery({
       queryKey: ["transaction-types"],
       queryFn: () => apiService.queryTransactionTypes({}),
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
     });
 
     // Initialize form data when editing an existing transaction
@@ -1298,7 +1301,6 @@ const TransactionForm = forwardRef<TransactionFormRef, TransactionFormProps>(
             }
             inputProps={{
               inputMode: "decimal", // Use decimal instead of numeric to allow decimal points
-              pattern: "[0-9,]*\\.?[0-9]*[kmb]?", // Allow numbers, commas, decimal points, and k/m/b
             }}
           />
         );
@@ -1320,8 +1322,8 @@ const TransactionForm = forwardRef<TransactionFormRef, TransactionFormProps>(
 
     const isLoading = entitiesLoading || mutation.isPending;
 
-    // Don't render the form until portfolio data is loaded
-    if (portfolioCategoryLoading) {
+    // Show loading only for essential data (user and basic entities)
+    if (!currentUser || entitiesLoading) {
       return (
         <LocalizationProvider dateAdapter={AdapterDateFns}>
           <Box sx={{ p: 3, maxWidth: 600, mx: "auto", textAlign: "center" }}>
@@ -1330,7 +1332,7 @@ const TransactionForm = forwardRef<TransactionFormRef, TransactionFormProps>(
             </Typography>
             <CircularProgress sx={{ mt: 2 }} />
             <Typography variant="body2" sx={{ mt: 2 }}>
-              Loading portfolio data...
+              Loading essential data...
             </Typography>
           </Box>
         </LocalizationProvider>
@@ -1386,12 +1388,24 @@ const TransactionForm = forwardRef<TransactionFormRef, TransactionFormProps>(
                       newValue?.entity_id.toString() || ""
                     )
                   }
+                  loading={portfolioCategoryLoading}
                   renderInput={(params) => (
                     <TextField
                       {...params}
                       label="Portfolio *"
                       required
                       fullWidth
+                      InputProps={{
+                        ...params.InputProps,
+                        endAdornment: (
+                          <>
+                            {portfolioCategoryLoading ? (
+                              <CircularProgress color="inherit" size={20} />
+                            ) : null}
+                            {params.InputProps.endAdornment}
+                          </>
+                        ),
+                      }}
                     />
                   )}
                   disabled={isLoading}

@@ -1,0 +1,137 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "onebor Deleterecord API",
+    "description": "Lambda function deletePandaRecord",
+    "version": "1.0.0",
+    "contact": {
+      "name": "onebor API Support",
+      "email": "support@onebor.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.onebor.com/panda",
+      "description": "Production server"
+    },
+    {
+      "url": "https://zwkvk3lyl3.execute-api.us-east-2.amazonaws.com/dev",
+      "description": "Development server"
+    }
+  ],
+  "paths": {
+    "/delete_record": {
+      "post": {
+        "summary": "Deleterecord",
+        "description": "Lambda function deletePandaRecord",
+        "operationId": "deletePandaRecord",
+        "tags": [
+          "Deleterecord"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "record_id": {
+                    "type": "integer"
+                  },
+                  "record_type": {
+                    "type": "string",
+                    "enum": [
+                      "Client Group",
+                      "Entity",
+                      "Entity Type",
+                      "Transaction",
+                      "Transaction Type",
+                      "User"
+                    ]
+                  }
+                },
+                "required": [
+                  "record_id",
+                  "record_type"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "options": {
+        "summary": "CORS preflight",
+        "description": "Handle CORS preflight requests",
+        "responses": {
+          "200": {
+            "description": "CORS preflight successful"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

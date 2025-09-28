@@ -707,10 +707,14 @@ export const updateTransaction = async (
 
 export const deleteTransaction = async (
   transactionId: number
-): Promise<void> => {
-  return apiCall<void>("/delete_transaction", {
-    transaction_id: transactionId,
-  });
+): Promise<{ success: boolean; message?: string; error?: string }> => {
+  return apiCall<{ success: boolean; message?: string; error?: string }>(
+    "/delete_record",
+    {
+      record_id: transactionId,
+      record_type: "Transaction",
+    }
+  );
 };
 
 // Position Keeper API Functions

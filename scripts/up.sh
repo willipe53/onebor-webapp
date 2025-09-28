@@ -1,0 +1,15 @@
+./deploy_lambda.py ../database/deletePandaRecord.py
+./deploy_lambda.py ../database/getPandaEntities.py
+./deploy_lambda.py ../database/getPandaEntityTypes.py
+./deploy_lambda.py ../database/getPandaTransactions.py
+./deploy_lambda.py ../database/getPandaTransactionStatuses.py
+./deploy_lambda.py ../database/getPandaTransactionTypes.py
+./deploy_lambda.py ../database/modifyPandaClientGroupEntities.py
+./deploy_lambda.py ../database/modifyPandaClientGroupMembership.py
+./deploy_lambda.py ../database/updatePandaClientGroup.py
+./deploy_lambda.py ../database/updatePandaEntity.py
+./deploy_lambda.py ../database/updatePandaEntityType.py
+./deploy_lambda.py ../database/updatePandaPositions.py
+./deploy_lambda.py ../database/updatePandaTransaction.py
+./deploy_lambda.py ../database/updatePandaTransactionType.py
+./deploy_lambda.py ../database/updatePandaUser.py

@@ -64,14 +64,14 @@ invoke_position_keeper() → calls positionKeeper Lambda asynchronously
 ```
 Receives invocation
     ↓
-acquire_distributed_lock() → calls updateLambdaLocks Lambda
+acquire_distributed_lock() → directly inserts into lambda_locks table
     ↓
 Lock acquired? → YES: Continue processing SQS messages
                 → NO: Exit immediately (another instance is running)
     ↓
 Process messages until idle timeout
     ↓
-release_distributed_lock() → calls updateLambdaLocks Lambda again
+release_distributed_lock() → directly deletes from lambda_locks table
 ```
 
 ### Key Insight
